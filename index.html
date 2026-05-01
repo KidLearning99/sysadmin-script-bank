@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SysAdmin PowerShell Script Bank | kidlearning99</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0c10;
+  --bg2: #0f1218;
+  --bg3: #161b24;
+  --border: #1e2530;
+  --border2: #2a3444;
+  --text: #e2e8f0;
+  --text2: #8fa3bc;
+  --text3: #4a6080;
+  --accent: #00d4ff;
+  --accent2: #0090cc;
+  --green: #00e5a0;
+  --yellow: #ffd166;
+  --red: #ff6b6b;
+  --purple: #b48fff;
+  --orange: #ff9a3c;
+  --pink: #ff6eb4;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Syne', sans-serif;
+  --radius: 8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+
+/* ── HEADER ── */
+.header{
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  padding:20px 24px 0;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);
+}
+.header-top{display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--green));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.logo-text h1{font-size:18px;font-weight:800;letter-spacing:-0.5px;color:var(--text);}
+.logo-text span{font-size:12px;color:var(--text3);font-family:var(--mono);}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.stat-badge{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:12px;font-family:var(--mono);color:var(--text2);}
+.stat-badge strong{color:var(--accent);}
+.github-btn{background:var(--accent);color:#000;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:var(--sans);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:background 0.15s;}
+.github-btn:hover{background:#33dcff;}
+
+/* ── SEARCH ── */
+.search-bar{display:flex;gap:8px;align-items:center;padding-bottom:12px;}
+.search-wrap{position:relative;flex:1;max-width:520px;}
+.search-wrap input{
+  width:100%;padding:9px 12px 9px 36px;
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius);color:var(--text);font-family:var(--mono);font-size:13px;
+  outline:none;transition:border-color 0.15s;
+}
+.search-wrap input:focus{border-color:var(--accent);}
+.search-wrap input::placeholder{color:var(--text3);}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none;}
+.result-count{font-size:12px;font-family:var(--mono);color:var(--text3);white-space:nowrap;}
+
+/* ── TABS ── */
+.tab-scroll{overflow-x:auto;padding-bottom:0;scrollbar-width:none;}
+.tab-scroll::-webkit-scrollbar{display:none;}
+.tabs{display:flex;gap:4px;min-width:max-content;border-bottom:1px solid var(--border);}
+.tab{
+  padding:8px 14px;font-size:12px;font-weight:600;font-family:var(--sans);
+  border:none;background:none;color:var(--text3);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:all 0.15s;white-space:nowrap;letter-spacing:0.2px;
+}
+.tab:hover{color:var(--text2);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-count{font-size:10px;font-family:var(--mono);background:var(--bg3);border-radius:10px;padding:1px 5px;margin-left:4px;color:var(--text3);}
+.tab.active .tab-count{color:var(--accent);}
+
+/* ── LAYOUT ── */
+.main{padding:20px 24px;max-width:1100px;}
+
+/* ── CATEGORY PILLS ── */
+.cat-ad{color:#60a5fa;}
+.cat-entra{color:#a78bfa;}
+.cat-exchange{color:#34d399;}
+.cat-intune{color:#fb923c;}
+.cat-defender{color:#f87171;}
+.cat-purview{color:#f472b6;}
+.cat-spo{color:#2dd4bf;}
+.cat-m365{color:#facc15;}
+.cat-network{color:#94a3b8;}
+.cat-winserver{color:#c084fc;}
+.cat-automation{color:#4ade80;}
+.cat-azure{color:#38bdf8;}
+
+/* ── SCRIPT CARDS ── */
+.cards{display:flex;flex-direction:column;gap:6px;}
+.card{
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+  transition:border-color 0.15s;
+}
+.card:hover{border-color:var(--border2);}
+.card.open{border-color:var(--accent2);}
+
+.card-header{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 14px;cursor:pointer;
+  transition:background 0.12s;
+}
+.card-header:hover{background:var(--bg3);}
+.card-num{font-family:var(--mono);font-size:10px;color:var(--text3);min-width:32px;}
+.card-title{flex:1;font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.1px;}
+.card-cat{font-size:10px;font-weight:700;font-family:var(--mono);letter-spacing:0.5px;padding:2px 7px;border-radius:4px;background:var(--bg3);}
+.chevron{color:var(--text3);font-size:11px;transition:transform 0.2s;flex-shrink:0;}
+.card.open .chevron{transform:rotate(180deg);}
+
+.card-body{display:none;border-top:1px solid var(--border);}
+.card.open .card-body{display:block;}
+.card-desc{padding:10px 14px 0;font-size:12px;color:var(--text2);line-height:1.6;}
+.code-wrap{margin:10px 14px 14px;position:relative;}
+.code-block{
+  background:var(--bg);border:1px solid var(--border2);
+  border-radius:6px;padding:12px 14px;
+  font-family:var(--mono);font-size:12px;color:#c9d1d9;
+  white-space:pre-wrap;word-break:break-all;line-height:1.7;
+  overflow-x:auto;max-height:400px;overflow-y:auto;
+}
+.copy-btn{
+  position:absolute;top:8px;right:8px;
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:5px;padding:4px 10px;font-size:11px;
+  font-family:var(--mono);color:var(--text2);cursor:pointer;
+  transition:all 0.15s;
+}
+.copy-btn:hover{background:var(--bg3);color:var(--text);}
+.copy-btn.ok{color:var(--green);border-color:var(--green);}
+.card-note{margin:0 14px 12px;padding:7px 10px;border-left:3px solid var(--yellow);background:rgba(255,209,102,0.06);font-size:11px;color:var(--yellow);border-radius:0 4px 4px 0;line-height:1.5;}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:60px 20px;color:var(--text3);}
+.empty-icon{font-size:32px;margin-bottom:12px;}
+.empty p{font-size:14px;}
+
+/* ── ADD SCRIPT PANEL ── */
+.add-btn{
+  background:var(--green);color:#000;
+  border:none;border-radius:6px;padding:7px 14px;
+  font-size:12px;font-weight:700;font-family:var(--sans);cursor:pointer;
+  transition:background 0.15s;white-space:nowrap;
+}
+.add-btn:hover{background:#33ffb8;}
+
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);
+  z-index:200;align-items:center;justify-content:center;padding:20px;
+}
+.modal-overlay.open{display:flex;}
+.modal{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:12px;width:100%;max-width:600px;
+  max-height:90vh;overflow-y:auto;
+}
+.modal-header{padding:18px 20px 0;display:flex;align-items:center;justify-content:space-between;}
+.modal-header h2{font-size:16px;font-weight:700;}
+.modal-close{background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:16px 20px 20px;}
+.form-group{margin-bottom:14px;}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;font-family:var(--mono);}
+.form-group input,.form-group select,.form-group textarea{
+  width:100%;padding:8px 10px;
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;
+  outline:none;transition:border-color 0.15s;
+}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);}
+.form-group textarea{min-height:120px;resize:vertical;}
+.form-group select option{background:var(--bg3);}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.btn-cancel{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:8px 16px;font-size:12px;font-family:var(--sans);cursor:pointer;}
+.btn-save{background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;font-family:var(--sans);cursor:pointer;}
+.btn-save:hover{background:#33dcff;}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:24px;right:24px;z-index:300;
+  background:var(--bg3);border:1px solid var(--green);
+  border-radius:8px;padding:10px 16px;
+  font-size:13px;font-family:var(--mono);color:var(--green);
+  transform:translateY(80px);opacity:0;transition:all 0.3s;
+}
+.toast.show{transform:translateY(0);opacity:1;}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* ── SYNTAX HIGHLIGHT ── */
+.kw{color:#ff7b72;}
+.str{color:#a5d6ff;}
+.cmd{color:#79c0ff;}
+.param{color:#d2a8ff;}
+.comment{color:#6e7681;}
+.pipe{color:#ffa657;}
+
+@media(max-width:640px){
+  .header{padding:14px 14px 0;}
+  .main{padding:14px;}
+  .header-top{gap:8px;}
+  .logo-text h1{font-size:15px;}
+  .stat-badge{display:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">
+        <h1>SysAdmin Script Bank</h1>
+        <span>kidlearning99 · PowerShell Reference</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="stat-badge" id="totalBadge"><strong>—</strong> scripts</div>
+      <button class="add-btn" onclick="openModal()">+ Add Script</button>
+      <a class="github-btn" href="https://github.com/kidlearning99/sysadmin-script-bank" target="_blank">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+  <div class="search-bar">
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="Search scripts, cmdlets, keywords…" oninput="render()">
+    </div>
+    <span class="result-count" id="resultCount"></span>
+  </div>
+  <div class="tab-scroll">
+    <div class="tabs" id="tabBar"></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="cards" id="cardList"></div>
+  <div class="empty" id="emptyState" style="display:none">
+    <div class="empty-icon">🔍</div>
+    <p>No scripts match your search. Try different keywords.</p>
+  </div>
+</div>
+
+<!-- Add Script Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Add New Script</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>TITLE *</label>
+        <input type="text" id="fTitle" placeholder="e.g. Find all service accounts with SPNs">
+      </div>
+      <div class="form-group">
+        <label>CATEGORY *</label>
+        <select id="fCat">
+          <option value="ad">Active Directory</option>
+          <option value="entra">Entra ID</option>
+          <option value="exchange">Exchange Online</option>
+          <option value="intune">Intune</option>
+          <option value="defender">Defender</option>
+          <option value="purview">Purview</option>
+          <option value="spo">SharePoint Online</option>
+          <option value="m365">M365 / General</option>
+          <option value="network">Network</option>
+          <option value="winserver">Windows Server</option>
+          <option value="automation">Automation</option>
+          <option value="azure">Azure</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>DESCRIPTION *</label>
+        <input type="text" id="fDesc" placeholder="What does this script do?">
+      </div>
+      <div class="form-group">
+        <label>POWERSHELL CODE *</label>
+        <textarea id="fCode" placeholder="Paste your PowerShell code here..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>WARNING / NOTE (optional)</label>
+        <input type="text" id="fNote" placeholder="e.g. Irreversible — verify before running">
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-save" onclick="saveScript()">Save Script</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="scripts-data.js"></script>
+<script>
+// ── CATEGORY CONFIG ──────────────────────────────────────────────────────────
+const CATS = {
+  all:        { label: 'All',           cls: '' },
+  ad:         { label: 'Active Directory', cls: 'cat-ad' },
+  entra:      { label: 'Entra ID',      cls: 'cat-entra' },
+  exchange:   { label: 'Exchange Online', cls: 'cat-exchange' },
+  intune:     { label: 'Intune',        cls: 'cat-intune' },
+  defender:   { label: 'Defender',      cls: 'cat-defender' },
+  purview:    { label: 'Purview',       cls: 'cat-purview' },
+  spo:        { label: 'SharePoint',    cls: 'cat-spo' },
+  m365:       { label: 'M365 / General',cls: 'cat-m365' },
+  network:    { label: 'Network',       cls: 'cat-network' },
+  winserver:  { label: 'Windows Server',cls: 'cat-winserver' },
+  automation: { label: 'Automation',    cls: 'cat-automation' },
+  azure:      { label: 'Azure',         cls: 'cat-azure' },
+};
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let activeTab = 'all';
+let customScripts = [];
+let allScripts = [];
+
+function init() {
+  // Load base scripts
+  allScripts = [...SCRIPTS_DATA];
+  // Load custom scripts from localStorage
+  try {
+    const saved = localStorage.getItem('customScripts');
+    if (saved) customScripts = JSON.parse(saved);
+  } catch(e) {}
+  allScripts = allScripts.concat(customScripts);
+  document.getElementById('totalBadge').innerHTML = `<strong>${allScripts.length}</strong> scripts`;
+  buildTabs();
+  render();
+}
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+function buildTabs() {
+  const bar = document.getElementById('tabBar');
+  bar.innerHTML = '';
+  Object.entries(CATS).forEach(([key, val]) => {
+    const count = key === 'all' ? allScripts.length : allScripts.filter(s => s.cat === key).length;
+    const t = document.createElement('button');
+    t.className = 'tab' + (activeTab === key ? ' active' : '');
+    t.innerHTML = `${val.label}<span class="tab-count">${count}</span>`;
+    t.onclick = () => { activeTab = key; buildTabs(); render(); };
+    bar.appendChild(t);
+  });
+}
+
+// ── SYNTAX HIGHLIGHT ─────────────────────────────────────────────────────────
+function highlight(code) {
+  return escHtml(code)
+    .replace(/(#.*$)/gm, '<span class="comment">$1</span>')
+    .replace(/\b(function|param|if|else|foreach|while|try|catch|throw|return|switch|begin|process|end|break|continue|do|until|in|filter)\b/gi, '<span class="kw">$1</span>')
+    .replace(/('([^']*)'|"([^"]*)")/g, '<span class="str">$1</span>')
+    .replace(/(Get-|Set-|New-|Remove-|Add-|Import-|Export-|Connect-|Disconnect-|Enable-|Disable-|Invoke-|Start-|Stop-|Restart-|Install-|Uninstall-|Update-|Search-|Find-|Test-|Out-|Select-|Where-|ForEach-|Sort-|Group-|Measure-|Compare-|Copy-|Move-|Rename-|Write-|Read-|Register-|Unregister-|Restore-|Revoke-|Reset-|Request-|Publish-|Protect-|Unlock-|Lock-|Expand-|Compress-|Clear-|Send-|Receive-|Wait-|Watch-|Confirm-|Deny-|Approve-)[\w-]+/g,
+      '<span class="cmd">$&</span>')
+    .replace(/(-[\w]+)(?=\s)/g, '<span class="param">$1</span>')
+    .replace(/(\|)/g, '<span class="pipe">$1</span>');
+}
+function escHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function render() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  const list = document.getElementById('cardList');
+  const empty = document.getElementById('emptyState');
+  list.innerHTML = '';
+
+  const filtered = allScripts.filter((s, i) => {
+    const matchTab = activeTab === 'all' || s.cat === activeTab;
+    if (!matchTab) return false;
+    if (!q) return true;
+    return (s.title + ' ' + s.desc + ' ' + s.code + ' ' + (s.note||'')).toLowerCase().includes(q);
+  });
+
+  document.getElementById('resultCount').textContent =
+    q ? `${filtered.length} result${filtered.length!==1?'s':''}` :
+    `${filtered.length} script${filtered.length!==1?'s':''}`;
+
+  if (!filtered.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  filtered.forEach((s, i) => {
+    const globalIdx = allScripts.indexOf(s) + 1;
+    const cat = CATS[s.cat] || CATS.ad;
+    const card = document.createElement('div');
+    card.className = 'card';
+    const isCustom = s._custom ? '✦ ' : '';
+    card.innerHTML = `
+      <div class="card-header" onclick="toggleCard(this)">
+        <span class="card-num">${String(globalIdx).padStart(3,'0')}</span>
+        <span class="card-title">${escHtml(isCustom + s.title)}</span>
+        <span class="card-cat ${cat.cls}">${cat.label}</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">${escHtml(s.desc)}</p>
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this,event)">Copy</button>
+          <pre class="code-block">${highlight(s.code)}</pre>
+        </div>
+        ${s.note ? `<div class="card-note">⚠ ${escHtml(s.note)}</div>` : ''}
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function toggleCard(header) {
+  const card = header.parentElement;
+  card.classList.toggle('open');
+}
+
+function copyCode(btn, e) {
+  e.stopPropagation();
+  const code = btn.nextElementSibling.textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('ok'); }, 2000);
+  });
+}
+
+// ── ADD SCRIPT MODAL ─────────────────────────────────────────────────────────
+function openModal() {
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  ['fTitle','fDesc','fCode','fNote'].forEach(id => document.getElementById(id).value='');
+}
+function closeModalOutside(e) {
+  if (e.target.id === 'modalOverlay') closeModal();
+}
+function saveScript() {
+  const title = document.getElementById('fTitle').value.trim();
+  const cat   = document.getElementById('fCat').value;
+  const desc  = document.getElementById('fDesc').value.trim();
+  const code  = document.getElementById('fCode').value.trim();
+  const note  = document.getElementById('fNote').value.trim();
+  if (!title || !desc || !code) { showToast('⚠ Please fill in all required fields.', '#ff6b6b'); return; }
+  const script = { cat, title, desc, code, _custom: true };
+  if (note) script.note = note;
+  customScripts.push(script);
+  allScripts.push(script);
+  localStorage.setItem('customScripts', JSON.stringify(customScripts));
+  document.getElementById('totalBadge').innerHTML = `<strong>${allScripts.length}</strong> scripts`;
+  buildTabs();
+  render();
+  closeModal();
+  showToast('✓ Script saved successfully!');
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(msg, color) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = color || 'var(--green)';
+  t.style.color = color || 'var(--green)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── KEYBOARD SHORTCUT ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('searchInput').focus();
+    document.getElementById('searchInput').select();
+  }
+  if (e.key === 'Escape') closeModal();
+});
+
+init();
+</script>
+</body>
+</html>
