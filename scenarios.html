@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scenario Playbooks | SysAdmin Script Bank</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c10;--bg2:#0f1218;--bg3:#161b24;--border:#1e2530;--border2:#2a3444;--text:#e2e8f0;--text2:#8fa3bc;--text3:#4a6080;--accent:#00d4ff;--green:#00e5a0;--yellow:#ffd166;--red:#ff6b6b;--purple:#b48fff;--orange:#ff9a3c;--pink:#ff6eb4;--mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;--radius:8px;}
+*{box-sizing:border-box;margin:0;padding:0;}html{scroll-behavior:smooth;}body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:20px 24px 0;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+.header-top{display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--purple),var(--pink));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.logo-text h1{font-size:18px;font-weight:800;letter-spacing:-0.5px;}.logo-text span{font-size:12px;color:var(--text3);font-family:var(--mono);}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.stat-badge{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:12px;font-family:var(--mono);color:var(--text2);}.stat-badge strong{color:var(--purple);}
+.nav-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:var(--sans);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}.nav-btn:hover{color:var(--text);}
+.add-btn{background:var(--purple);color:#000;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:var(--sans);cursor:pointer;white-space:nowrap;}.add-btn:hover{background:#c9a8ff;}
+.search-bar{display:flex;gap:8px;align-items:center;padding-bottom:12px;}
+.search-wrap{position:relative;flex:1;max-width:520px;}
+.search-wrap input{width:100%;padding:9px 12px 9px 36px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s;}.search-wrap input:focus{border-color:var(--purple);}.search-wrap input::placeholder{color:var(--text3);}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none;}
+.result-count{font-size:12px;font-family:var(--mono);color:var(--text3);white-space:nowrap;}
+.tab-scroll{overflow-x:auto;scrollbar-width:none;}.tab-scroll::-webkit-scrollbar{display:none;}
+.tabs{display:flex;gap:4px;min-width:max-content;border-bottom:1px solid var(--border);}
+.tab{padding:8px 14px;font-size:12px;font-weight:600;font-family:var(--sans);border:none;background:none;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap;}.tab:hover{color:var(--text2);}.tab.active{color:var(--purple);border-bottom-color:var(--purple);}
+.tab-count{font-size:10px;font-family:var(--mono);background:var(--bg3);border-radius:10px;padding:1px 5px;margin-left:4px;color:var(--text3);}.tab.active .tab-count{color:var(--purple);}
+.main{padding:24px;max-width:1400px;}
+.scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
+.scenario-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.scenario-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--card-color,var(--purple));opacity:.5;transition:opacity .2s;}
+.scenario-card:hover{border-color:var(--border2);transform:translateY(-1px);}.scenario-card:hover::before{opacity:1;}
+.sc-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+.sc-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--bg3);}
+.sc-meta{flex:1;min-width:0;}.sc-title{font-size:13px;font-weight:700;color:var(--text);letter-spacing:-.2px;margin-bottom:3px;line-height:1.3;}
+.sc-cat{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.5px;}
+.sc-badge{display:inline-block;font-size:9px;font-family:var(--mono);font-weight:600;padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle;}
+.badge-easy{background:rgba(0,229,160,.1);color:var(--green);border:1px solid rgba(0,229,160,.2);}
+.badge-medium{background:rgba(255,209,102,.1);color:var(--yellow);border:1px solid rgba(255,209,102,.2);}
+.badge-advanced{background:rgba(255,107,107,.1);color:var(--red);border:1px solid rgba(255,107,107,.2);}
+.sc-desc{font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:10px;}
+.sc-footer{display:flex;align-items:center;justify-content:space-between;}
+.sc-steps{font-size:10px;font-family:var(--mono);color:var(--text3);}.sc-steps strong{color:var(--text2);}
+.sc-arrow{color:var(--text3);font-size:12px;transition:transform .2s,color .2s;}.scenario-card:hover .sc-arrow{transform:translateX(3px);color:var(--purple);}
+.custom-tag{font-size:9px;font-family:var(--mono);background:rgba(180,143,255,.1);color:var(--purple);border:1px solid rgba(180,143,255,.2);border-radius:3px;padding:1px 5px;}
+.empty{text-align:center;padding:60px 20px;color:var(--text3);}.empty-icon{font-size:32px;margin-bottom:12px;}.empty p{font-size:14px;}
+.detail-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;overflow-y:auto;}.detail-overlay.open{display:block;}
+.detail-panel{background:var(--bg2);min-height:100vh;max-width:900px;margin:0 auto;border-left:1px solid var(--border);border-right:1px solid var(--border);}
+.detail-header{padding:18px 28px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);z-index:10;display:flex;align-items:center;gap:14px;}
+.detail-back{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:7px 12px;font-size:12px;font-family:var(--sans);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap;}.detail-back:hover{color:var(--text);}
+.detail-title-block{flex:1;min-width:0;}.detail-title{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.4px;}.detail-subtitle{font-size:11px;font-family:var(--mono);color:var(--text3);margin-top:2px;}
+.detail-progress{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.progress-text{font-size:11px;font-family:var(--mono);color:var(--text3);}
+.progress-bar-wrap{width:90px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden;}.progress-bar{height:100%;background:var(--purple);border-radius:2px;transition:width .3s;}
+.detail-body{padding:28px;}
+.steps-list{display:flex;flex-direction:column;}
+.step-item{display:flex;gap:0;}
+.step-left{display:flex;flex-direction:column;align-items:center;margin-right:18px;width:30px;flex-shrink:0;}
+.step-num{width:30px;height:30px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:var(--mono);color:var(--text3);background:var(--bg);flex-shrink:0;transition:all .2s;cursor:pointer;}
+.step-num.done{background:var(--purple);border-color:var(--purple);color:#000;}.step-num.active{border-color:var(--purple);color:var(--purple);}
+.step-line{width:2px;background:var(--border);margin:4px 0;min-height:20px;flex:1;}.step-line.done{background:var(--purple);}
+.step-content{flex:1;padding-bottom:24px;min-width:0;}
+.step-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:5px;cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}.step-title:hover{color:var(--purple);}
+.step-done-badge{font-size:9px;font-family:var(--mono);background:rgba(180,143,255,.15);color:var(--purple);border-radius:3px;padding:2px 5px;}
+.step-desc{font-size:12px;color:var(--text2);line-height:1.65;margin-bottom:10px;}
+.code-wrap{position:relative;margin-bottom:8px;}
+.code-block{background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:11.5px;color:#c9d1d9;white-space:pre;overflow-x:auto;line-height:1.65;max-height:400px;overflow-y:auto;}
+.copy-btn{position:absolute;top:7px;right:7px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:3px 9px;font-size:10px;font-family:var(--mono);color:var(--text2);cursor:pointer;transition:all .15s;}.copy-btn:hover{background:var(--bg3);color:var(--text);}.copy-btn.ok{color:var(--green);border-color:var(--green);}
+.step-warning{padding:7px 11px;border-left:3px solid var(--yellow);background:rgba(255,209,102,.06);font-size:11px;color:var(--yellow);border-radius:0 4px 4px 0;line-height:1.5;margin-bottom:8px;}
+.step-info{padding:7px 11px;border-left:3px solid var(--accent);background:rgba(0,212,255,.06);font-size:11px;color:var(--accent);border-radius:0 4px 4px 0;line-height:1.5;margin-bottom:8px;}
+.step-check-btn{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:5px;padding:5px 12px;font-size:11px;font-family:var(--mono);cursor:pointer;transition:all .15s;}.step-check-btn:hover{border-color:var(--purple);color:var(--purple);}.step-check-btn.done{background:rgba(180,143,255,.1);border-color:var(--purple);color:var(--purple);}
+.complete-banner{text-align:center;padding:28px;color:var(--green);}.complete-banner .ci{font-size:28px;margin-bottom:8px;}.complete-banner .ct{font-size:15px;font-weight:700;}.complete-banner .cs{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:3px;}
+.reset-btn{margin-top:14px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:7px 14px;font-size:11px;font-family:var(--sans);cursor:pointer;}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:300;align-items:center;justify-content:center;padding:20px;}.modal-overlay.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;}
+.modal-header{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}.modal-header h2{font-size:15px;font-weight:700;}
+.modal-close{background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;}.modal-close:hover{color:var(--text);}
+.modal-body{padding:0 24px 24px;}
+.form-group{margin-bottom:12px;}.form-group label{display:block;font-size:10px;font-weight:600;color:var(--text2);margin-bottom:4px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.3px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .15s;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--purple);}
+.form-group textarea{min-height:72px;resize:vertical;}.form-group select option{background:var(--bg3);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.form-section{font-size:10px;font-weight:700;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;display:flex;align-items:center;gap:8px;}.form-section::after{content:'';flex:1;height:1px;background:var(--border);}
+.steps-builder{display:flex;flex-direction:column;gap:8px;}
+.step-entry{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:11px;}
+.step-entry-header{display:flex;align-items:center;gap:8px;margin-bottom:9px;}.step-entry-num{font-size:10px;font-family:var(--mono);color:var(--text3);font-weight:700;}
+.step-remove{margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;transition:color .15s;}.step-remove:hover{color:var(--red);}
+.add-step-btn{background:none;border:1px dashed var(--border2);border-radius:6px;color:var(--text3);cursor:pointer;padding:7px;font-size:11px;font-family:var(--mono);width:100%;transition:all .15s;margin-top:6px;}.add-step-btn:hover{border-color:var(--purple);color:var(--purple);}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.btn-cancel{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:7px 14px;font-size:12px;font-family:var(--sans);cursor:pointer;}
+.btn-save{background:var(--purple);color:#000;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:var(--sans);cursor:pointer;}.btn-save:hover{background:#c9a8ff;}
+.toast{position:fixed;bottom:24px;right:24px;z-index:400;background:var(--bg3);border:1px solid var(--green);border-radius:8px;padding:10px 16px;font-size:12px;font-family:var(--mono);color:var(--green);transform:translateY(80px);opacity:0;transition:all .3s;}.toast.show{transform:translateY(0);opacity:1;}
+.kw{color:#ff7b72;}.str{color:#a5d6ff;}.cmd{color:#79c0ff;}.param{color:#d2a8ff;}.comment{color:#6e7681;}.pipe{color:#ffa657;}.var{color:#ffa657;}
+::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+@media(max-width:640px){.header{padding:14px 14px 0;}.main{padding:14px;}.scenario-grid{grid-template-columns:1fr;}.form-row{grid-template-columns:1fr;}.detail-progress{display:none;}.detail-header{padding:14px 16px;}.detail-body{padding:16px;}.detail-title{font-size:15px;}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-top">
+    <div class="logo">
+      <div class="logo-icon">🎯</div>
+      <div class="logo-text"><h1>Scenario Playbooks</h1><span>kidlearning99 · SysAdmin Script Bank</span></div>
+    </div>
+    <div class="header-right">
+      <div class="stat-badge" id="totalBadge"><strong>—</strong> scenarios</div>
+      <a class="nav-btn" href="index.html">⚡ Script Bank</a>
+      <button class="add-btn" onclick="openModal()">+ Add Scenario</button>
+    </div>
+  </div>
+  <div class="search-bar">
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="Search scenarios, cmdlets, symptoms…" oninput="render()">
+    </div>
+    <span class="result-count" id="resultCount"></span>
+  </div>
+  <div class="tab-scroll"><div class="tabs" id="tabBar"></div></div>
+</div>
+<div class="main">
+  <div class="scenario-grid" id="scenarioGrid"></div>
+  <div class="empty" id="emptyState" style="display:none"><div class="empty-icon">🔍</div><p>No scenarios match your search.</p></div>
+</div>
+<div class="detail-overlay" id="detailOverlay"><div class="detail-panel" id="detailPanel"></div></div>
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-header"><h2>Add New Scenario</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Title *</label><input type="text" id="fTitle" placeholder="e.g. Mailbox Delegation Audit"></div>
+        <div class="form-group"><label>Icon (emoji)</label><input type="text" id="fIcon" placeholder="🔍" maxlength="2" style="text-align:center;font-size:18px;"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Category *</label>
+          <select id="fCat">
+            <option value="entra">Entra ID</option><option value="ad">Active Directory</option>
+            <option value="exchange">Exchange Online</option><option value="intune">Intune</option>
+            <option value="defender">Defender</option><option value="purview">Purview</option>
+            <option value="spo">SharePoint Online</option><option value="m365">M365 / General</option>
+            <option value="network">Network</option><option value="winserver">Windows Server</option>
+            <option value="automation">Automation</option><option value="azure">Azure</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Difficulty</label>
+          <select id="fDiff"><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Advanced">Advanced</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Description *</label><input type="text" id="fDesc" placeholder="What problem does this scenario solve?"></div>
+      <div class="form-section">Steps</div>
+      <div class="steps-builder" id="stepsBuilder"></div>
+      <button class="add-step-btn" onclick="addStepEntry()">+ Add Step</button>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-save" onclick="saveScenario()">Save Scenario</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="scenarios-data.js"></script>
+<script>
+const CATS={all:{label:'All'},entra:{label:'Entra ID',color:'#b48fff'},ad:{label:'Active Directory',color:'#60a5fa'},exchange:{label:'Exchange Online',color:'#34d399'},intune:{label:'Intune',color:'#fb923c'},defender:{label:'Defender',color:'#f87171'},purview:{label:'Purview',color:'#f472b6'},spo:{label:'SharePoint',color:'#2dd4bf'},m365:{label:'M365 / General',color:'#facc15'},network:{label:'Network',color:'#94a3b8'},winserver:{label:'Windows Server',color:'#c084fc'},automation:{label:'Automation',color:'#4ade80'},azure:{label:'Azure',color:'#38bdf8'}};
+let activeTab='all',customScenarios=[],allScenarios=[],currentId=null,completedSteps={};
+function init(){
+  allScenarios=[...SCENARIOS_DATA];
+  try{const s=localStorage.getItem('cscen_v3');if(s)customScenarios=JSON.parse(s);}catch(e){}
+  allScenarios=allScenarios.concat(customScenarios);
+  try{const cs=localStorage.getItem('cstep_v3');if(cs){const r=JSON.parse(cs);for(const k in r)completedSteps[k]=new Set(r[k]);}}catch(e){}
+  document.getElementById('totalBadge').innerHTML=`<strong>${allScenarios.length}</strong> scenarios`;
+  buildTabs();render();
+}
+function buildTabs(){
+  const bar=document.getElementById('tabBar');bar.innerHTML='';
+  Object.entries(CATS).forEach(([key,val])=>{
+    const count=key==='all'?allScenarios.length:allScenarios.filter(s=>s.cat===key).length;
+    if(count===0&&key!=='all')return;
+    const t=document.createElement('button');t.className='tab'+(activeTab===key?' active':'');
+    t.innerHTML=`${val.label}<span class="tab-count">${count}</span>`;
+    t.onclick=()=>{activeTab=key;buildTabs();render();};bar.appendChild(t);
+  });
+}
+function render(){
+  const q=document.getElementById('searchInput').value.toLowerCase().trim();
+  const grid=document.getElementById('scenarioGrid'),empty=document.getElementById('emptyState');
+  grid.innerHTML='';
+  const filtered=allScenarios.filter(s=>{
+    const matchTab=activeTab==='all'||s.cat===activeTab;
+    const matchQ=!q||s.title.toLowerCase().includes(q)||s.desc.toLowerCase().includes(q)||s.steps.some(st=>st.title.toLowerCase().includes(q)||(st.desc||'').toLowerCase().includes(q)||(st.code||'').toLowerCase().includes(q));
+    return matchTab&&matchQ;
+  });
+  document.getElementById('resultCount').textContent=q?`${filtered.length} result${filtered.length!==1?'s':''}`:'';
+  if(!filtered.length){grid.style.display='none';empty.style.display='block';return;}
+  grid.style.display='grid';empty.style.display='none';
+  filtered.forEach(s=>{
+    const catColor=CATS[s.cat]?.color||'#b48fff';
+    const done=(completedSteps[s.id]?.size||0),total=s.steps.length;
+    const pct=total?Math.round(done/total*100):0;
+    const diffClass=`badge-${(s.difficulty||'Medium').toLowerCase()}`;
+    const card=document.createElement('div');card.className='scenario-card'+(s.custom?' custom':'');
+    card.style.setProperty('--card-color',catColor);
+    card.innerHTML=`<div class="sc-header"><div class="sc-icon">${s.icon||'🔧'}</div><div class="sc-meta"><div class="sc-title">${esc(s.title)}<span class="sc-badge ${diffClass}">${esc(s.difficulty||'Medium')}</span></div><div class="sc-cat">${CATS[s.cat]?.label||s.cat}${s.custom?' &nbsp;<span class="custom-tag">CUSTOM</span>':''}</div></div></div><div class="sc-desc">${esc(s.desc)}</div><div class="sc-footer"><div class="sc-steps"><strong>${done}/${total}</strong> steps${pct>0?` · ${pct}% done`:''}</div><span class="sc-arrow">→</span></div>`;
+    card.onclick=()=>openDetail(s.id);grid.appendChild(card);
+  });
+}
+function openDetail(id){currentId=id;const s=allScenarios.find(x=>x.id===id);if(!s)return;if(!completedSteps[id])completedSteps[id]=new Set();renderDetail(s);document.getElementById('detailOverlay').classList.add('open');document.body.style.overflow='hidden';}
+function closeDetail(){document.getElementById('detailOverlay').classList.remove('open');document.body.style.overflow='';currentId=null;saveSteps();render();}
+function renderDetail(s){
+  const done=completedSteps[s.id];
+  const pct=s.steps.length?Math.round(done.size/s.steps.length*100):0;
+  let html=s.steps.map((step,i)=>{
+    const isDone=done.has(i),isAct=!isDone&&(i===0||done.has(i-1));
+    const nc=isDone?'done':isAct?'active':'',lc=isDone?'done':'',isLast=i===s.steps.length-1;
+    let extras='';
+    if(step.warning)extras+=`<div class="step-warning">⚠️ ${esc(step.warning)}</div>`;
+    if(step.info)extras+=`<div class="step-info">ℹ️ ${esc(step.info)}</div>`;
+    const code=step.code?`<div class="code-wrap"><pre class="code-block">${highlight(step.code)}</pre><button class="copy-btn" onclick="copyCode(this,${i})">Copy</button></div>`:'';
+    return `<div class="step-item"><div class="step-left"><div class="step-num ${nc}" onclick="toggleStep(${i})">${isDone?'✓':i+1}</div>${!isLast?`<div class="step-line ${lc}"></div>`:''}</div><div class="step-content"><div class="step-title" onclick="toggleStep(${i})">Step ${i+1}: ${esc(step.title)}${isDone?'<span class="step-done-badge">✓ Done</span>':''}</div><div class="step-desc">${esc(step.desc)}</div>${extras}${code}<button class="step-check-btn ${isDone?'done':''}" onclick="toggleStep(${i})">${isDone?'✓ Mark Incomplete':'✓ Mark Complete'}</button></div></div>`;
+  }).join('');
+  const complete=done.size===s.steps.length&&s.steps.length>0?`<div class="complete-banner"><div class="ci">✅</div><div class="ct">Scenario Complete!</div><div class="cs">All steps marked done.</div><button class="reset-btn" onclick="resetScenario('${s.id}')">Reset Progress</button></div>`:'';
+  document.getElementById('detailPanel').innerHTML=`<div class="detail-header"><button class="detail-back" onclick="closeDetail()">← Back</button><div class="detail-title-block"><div class="detail-title">${s.icon||''} ${esc(s.title)}</div><div class="detail-subtitle">${CATS[s.cat]?.label||s.cat} · ${s.difficulty||'Medium'} · ${s.steps.length} steps</div></div><div class="detail-progress"><span class="progress-text">${done.size}/${s.steps.length}</span><div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div></div></div><div class="detail-body"><div class="steps-list">${html}</div>${complete}</div>`;
+}
+function toggleStep(i){const s=allScenarios.find(x=>x.id===currentId);if(!s)return;if(!completedSteps[s.id])completedSteps[s.id]=new Set();if(completedSteps[s.id].has(i)){completedSteps[s.id].delete(i);for(let j=i+1;j<s.steps.length;j++)completedSteps[s.id].delete(j);}else{for(let j=0;j<=i;j++)completedSteps[s.id].add(j);}saveSteps();renderDetail(s);}
+function resetScenario(id){completedSteps[id]=new Set();saveSteps();renderDetail(allScenarios.find(x=>x.id===id));}
+function saveSteps(){const r={};for(const k in completedSteps)r[k]=[...completedSteps[k]];localStorage.setItem('cstep_v3',JSON.stringify(r));}
+function copyCode(btn,idx){const s=allScenarios.find(x=>x.id===currentId);if(!s)return;navigator.clipboard.writeText(s.steps[idx]?.code||'').then(()=>{btn.textContent='Copied!';btn.classList.add('ok');setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('ok');},2000);});}
+function highlight(code){return esc(code).replace(/(#[^\r\n]*)/gm,'<span class="comment">$1</span>').replace(/\b(function|param|if|else|foreach|while|try|catch|throw|return|switch|begin|process|end|break|continue|do|until|in|filter)\b/gi,'<span class="kw">$1</span>').replace(/('([^']*)'|"([^"]*)")/g,'<span class="str">$1</span>').replace(/(\$[\w:]+)/g,'<span class="var">$1</span>').replace(/(Get-|Set-|New-|Remove-|Add-|Import-|Export-|Connect-|Disconnect-|Enable-|Disable-|Invoke-|Start-|Stop-|Install-|Update-|Search-|Find-|Test-|Out-|Select-|Where-|ForEach-|Sort-|Group-|Compare-|Copy-|Move-|Write-|Read-|Register-|Restore-|Revoke-|Reset-|Unlock-|Clear-|Send-|Wait-|Approve-)[\w-]+/g,'<span class="cmd">$&</span>').replace(/(-[\w]+)(?=\s)/g,'<span class="param">$1</span>').replace(/(\|)/g,'<span class="pipe">$1</span>');}
+function esc(t){if(!t)return'';return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+let stepCount=0;
+function openModal(){['fTitle','fIcon','fDesc'].forEach(id=>document.getElementById(id).value='');document.getElementById('fCat').value='entra';document.getElementById('fDiff').value='Medium';const b=document.getElementById('stepsBuilder');b.innerHTML='';stepCount=0;addStepEntry();document.getElementById('modalOverlay').classList.add('open');}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
+function closeModalOutside(e){if(e.target===document.getElementById('modalOverlay'))closeModal();}
+function addStepEntry(){const i=stepCount++,b=document.getElementById('stepsBuilder');const d=document.createElement('div');d.className='step-entry';d.id=`se-${i}`;d.innerHTML=`<div class="step-entry-header"><span class="step-entry-num">STEP ${i+1}</span><button class="step-remove" onclick="removeStep(${i})">✕</button></div><div class="form-group" style="margin-bottom:6px;"><label>Step Title</label><input id="st-t-${i}" type="text" placeholder="e.g. Check connectivity"></div><div class="form-group" style="margin-bottom:6px;"><label>Description</label><input id="st-d-${i}" type="text" placeholder="What does this step do?"></div><div class="form-group" style="margin-bottom:6px;"><label>PowerShell Code</label><textarea id="st-c-${i}" style="min-height:64px;" placeholder="# Your PowerShell..."></textarea></div><div class="form-group" style="margin-bottom:0;"><label>Warning (optional)</label><input id="st-w-${i}" type="text" placeholder="Caution note..."></div>`;b.appendChild(d);}
+function removeStep(i){const e=document.getElementById(`se-${i}`);if(e)e.remove();}
+function saveScenario(){const title=document.getElementById('fTitle').value.trim(),desc=document.getElementById('fDesc').value.trim();if(!title||!desc){showToast('Title and Description required.');return;}const steps=[];document.getElementById('stepsBuilder').querySelectorAll('.step-entry').forEach(e=>{const n=e.id.replace('se-','');const t=document.getElementById(`st-t-${n}`)?.value.trim(),d=document.getElementById(`st-d-${n}`)?.value.trim(),c=document.getElementById(`st-c-${n}`)?.value.trim(),w=document.getElementById(`st-w-${n}`)?.value.trim();if(t)steps.push({title:t,desc:d||'',code:c||'',warning:w||''});});if(!steps.length){showToast('Add at least one step.');return;}const sc={id:'c'+Date.now(),cat:document.getElementById('fCat').value,icon:document.getElementById('fIcon').value.trim()||'🔧',title,difficulty:document.getElementById('fDiff').value,desc,steps,custom:true};customScenarios.push(sc);allScenarios.push(sc);localStorage.setItem('cscen_v3',JSON.stringify(customScenarios));document.getElementById('totalBadge').innerHTML=`<strong>${allScenarios.length}</strong> scenarios`;closeModal();buildTabs();render();showToast(`✓ "${title}" added!`);}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(document.getElementById('modalOverlay').classList.contains('open'))closeModal();else if(document.getElementById('detailOverlay').classList.contains('open'))closeDetail();}});
+init();
+</script>
+</body>
+</html>
