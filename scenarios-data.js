@@ -1279,6 +1279,691 @@ code:`Get-AzKeyVault | ForEach-Object {
         # Update-AzKeyVault -VaultName $_.VaultName -EnableSoftDelete $true -EnablePurgeProtection $true
     }else{Write-Host "OK: $($_.VaultName)" -ForegroundColor Green}
 }`,warning:'Without purge protection, deleted secrets can be permanently destroyed. Enable on all vaults.'}
+]},
+
+// ════ EXCHANGE ONLINE — REAL-WORLD TROUBLESHOOTING (42 SCENARIOS) ════
+
+{id:'x8',cat:'exchange',icon:'📭',title:'External Partner Not Receiving Mail — Silent Drop at EOP',difficulty:'Advanced',
+desc:'Partner reports zero emails received for 72h. No NDR generated on either side. Sent Items show delivered.',
+steps:[
+{title:'Run Message Trace',desc:'Confirm via extended message trace — filter last 7 days for sender/recipient pair.',
+code:`Connect-ExchangeOnline
+Get-MessageTrace -SenderAddress "user@yourdomain.com" -RecipientAddress "partner@domain.com" -StartDate (Get-Date).AddDays(-7) -EndDate (Get-Date) | FL`},
+{title:'Decode the Delivery Status',desc:'Check status codes. Delivered+no hop = EOP handed off. FilteredAsSpam or GettingStatus = recipient gateway issue.',
+code:`Get-MessageTraceDetail -MessageTraceId "PASTE_ID" -RecipientAddress "partner@domain.com" |
+  Select-Object Date,Event,Action,Detail | Format-Table -AutoSize -Wrap`},
+{title:'Check Outbound Connector TLS',desc:'If TLS is enforced and partner certificate expired, mail silently queues then drops.',
+code:`Connect-ExchangeOnline
+Get-OutboundConnector | Select-Object Name,TlsSettings,SmartHosts,Enabled | FL`},
+{title:'Test SMTP Connectivity to Partner',desc:'Verify port 25 is reachable and review the banner.',
+code:`Test-NetConnection -ComputerName "mail.partnerdomain.com" -Port 25`},
+{title:'Engage Partner IT with EOP Headers',desc:'Request partner gateway logs for your sending IP visible in message trace headers. Their spam filter may be silently discarding.',
+code:`# EOP outbound IPs published at: https://aka.ms/o365ips
+# Share with partner IT to whitelist your sending IPs`,
+info:'If connector enforces TLS and partner cert expired, messages queue silently and expire. Fix: remove TLS enforcement or update partner cert.'}
+]},
+
+{id:'x9',cat:'exchange',icon:'❌',title:'NDR 5.7.57 — SMTP Auth Blocked on Shared Mailbox',difficulty:'Medium',
+desc:'Service account gets NDR 5.7.57: "Client not authenticated to send anonymous mail." Was working last week.',
+steps:[
+{title:'Check Authentication Policy',desc:'A security hardening run may have applied a policy blocking SMTP AUTH.',
+code:`Connect-ExchangeOnline
+Get-AuthenticationPolicy | FL`},
+{title:'Inspect Mailbox-Level SMTP Auth Setting',desc:'Check if SMTP AUTH is explicitly disabled at the mailbox level.',
+code:`Get-CASMailbox "SharedMailbox@domain.com" | FL SmtpClientAuthenticationDisabled`},
+{title:'Check Org-Wide SMTP Auth Setting',desc:'If disabled at org level, all mailboxes are blocked regardless of per-mailbox setting.',
+code:`Get-TransportConfig | FL SmtpClientAuthenticationDisabled`},
+{title:'Re-Enable SMTP Auth for Specific Mailbox',desc:'Enable only for the shared mailbox — do not enable org-wide.',
+code:`Set-CASMailbox "SharedMailbox@domain.com" -SmtpClientAuthenticationDisabled $false`,
+warning:'Enabling SMTP AUTH org-wide is a security risk. Always scope to specific mailboxes only.'},
+{title:'Verify App Credentials & Consider OAuth',desc:'Confirm the app uses correct credentials. Transition to Graph API or SMTP OAuth.',
+code:`# Modern alternative: use Microsoft Graph API with OAuth
+# https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth`,
+info:'NDR 5.7.57 = SMTP AUTH attempted but blocked. Fix: per-mailbox re-enable and transition to OAuth long-term.'}
+]},
+
+{id:'x10',cat:'exchange',icon:'📩',title:'Legitimate Email Going to Spam — SPF Softfail from SaaS Relay',difficulty:'Easy',
+desc:'Marketing newsletters via third-party SaaS platform land in recipients Junk. SPF record exists but SaaS relay IPs are missing.',
+steps:[
+{title:'Read Message Headers for SPF Result',desc:'Check Authentication-Results header in junk-delivered message.',
+code:`# In raw headers look for:
+# Authentication-Results: spf=softfail
+# softfail (~all) allows delivery but marks as suspicious`},
+{title:'Identify SaaS Sending IPs and Update SPF',desc:'Add the SaaS include mechanism to your SPF record.',
+code:`# Current SPF check:
+Resolve-DnsName "yourdomain.com" -Type TXT | Select-Object Strings
+# Add SaaS include: v=spf1 include:_spf.yourdomain.com include:sendgrid.net ~all
+# Validate: nslookup -type=TXT yourdomain.com`,
+warning:'Do not exceed 10 DNS lookups in your SPF record — causes SPF permerror.'},
+{title:'Set Up DKIM in SaaS Platform',desc:'Add CNAME records for DKIM signing — adds cryptographic pass stronger than SPF alone.',
+code:`Connect-ExchangeOnline
+Get-DkimSigningConfig | Select-Object Domain,Enabled,Status`},
+{title:'Set DMARC Policy',desc:'Add DMARC record for monitoring then tighten enforcement.',
+code:`# Add DNS TXT record: _dmarc.yourdomain.com
+# v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com
+# Progress to p=quarantine once SPF+DKIM passing
+Resolve-DnsName "_dmarc.yourdomain.com" -Type TXT`,
+info:'SPF softfail + no DKIM = low composite auth score = junk. Fix: SPF include + DKIM CNAME + DMARC monitoring.'}
+]},
+
+{id:'x11',cat:'exchange',icon:'🔐',title:'Connector Failure After TLS Certificate Renewal',difficulty:'Advanced',
+desc:'Inbound partner connector stopped after partner renewed their TLS cert. Messages queue with NDR 4.7.57.',
+steps:[
+{title:'Confirm Error in Message Trace',desc:'Extended trace shows exact TLS error: untrusted, expired, or subject mismatch.',
+code:`Connect-ExchangeOnline
+Get-MessageTrace -StartDate (Get-Date).AddDays(-2) -EndDate (Get-Date) | Where-Object{$_.Status -eq "Failed"} | FL`},
+{title:'Inspect Connector TLS Settings',desc:'Find if TlsSenderCertificateName references the old CN.',
+code:`Get-InboundConnector | FL Name,TlsSenderCertificateName,RequireTls,Enabled`},
+{title:'Verify New Certificate CN from Partner',desc:'Get the new cert Subject CN and verify with test.',
+code:`Test-NetConnection -ComputerName "mail.partner.com" -Port 25`},
+{title:'Update Connector with New Certificate Name',desc:'Set the TlsSenderCertificateName to match the renewed certificate.',
+code:`Set-InboundConnector -Identity "PartnerInbound" -TlsSenderCertificateName "mail.partner.com"`,
+info:'Fix: update TlsSenderCertificateName to new CN. After updating, ask partner to resend a test message.'}
+]},
+
+{id:'x12',cat:'exchange',icon:'🔁',title:'Mail Loop — Hybrid Routing Misconfiguration',difficulty:'Advanced',
+desc:'Message to on-prem mailbox bounces between EOP and on-prem. NDR 5.4.6: Routing loop detected.',
+steps:[
+{title:'Read X-MS-Exchange-Organization Headers',desc:'Open full headers — count hops and find where the loop turns back.',
+code:`# Look for repeated Received: headers and X-MS-Exchange-Organization-SCL values
+# Count where EOP and on-prem ping-pong`},
+{title:'Check On-Prem Send Connector',desc:'Verify on-prem send connector is not routing all mail back to EOP.',
+code:`# On Exchange Server 2016/2019:
+Get-SendConnector | FL Name,AddressSpaces,SmartHosts,Enabled`},
+{title:'Verify Accepted Domains Type',desc:'Domain must be InternalRelay (not Authoritative) if mailboxes remain on-prem.',
+code:`Connect-ExchangeOnline
+Get-AcceptedDomain | FL DomainName,DomainType`},
+{title:'Fix Accepted Domain and Test',desc:'Change to InternalRelay for hybrid domain, or fix on-prem send connector smart host.',
+code:`Set-AcceptedDomain -Identity "yourdomain.com" -DomainType InternalRelay`,
+warning:'Authoritative + missing on-prem mailbox = loop. On-prem should route outbound to internet directly.'}
+]},
+
+{id:'x13',cat:'exchange',icon:'📆',title:'Calendar Meeting Requests Going to Junk',difficulty:'Medium',
+desc:'Meeting invites from external partners arrive in Junk since a Defender policy change two weeks ago.',
+steps:[
+{title:'Read X-Forefront-Antispam-Report Header',desc:'Find the SCL value and identify what triggered the score.',
+code:`# In raw headers look for:
+# X-Forefront-Antispam-Report: SCL:5; CIP:x.x.x.x; ...
+# SCL 5+ = spam classification`},
+{title:'Check Allowed Sender Domains',desc:'Verify partner domain is in the org allowed sender list.',
+code:`Connect-ExchangeOnline
+Get-HostedContentFilterPolicy | Select-Object Name,AllowedSenderDomains,BulkThreshold | FL`},
+{title:'Check Bulk Threshold Setting',desc:'Meeting platforms often have BCL-4. If BulkThreshold is too low, they get junked.',
+code:`Get-HostedContentFilterPolicy | Select-Object Name,BulkThreshold`},
+{title:'Add Domain to Safe Senders & Adjust Threshold',desc:'Whitelist the partner domain and raise bulk threshold.',
+code:`Set-HostedContentFilterPolicy -Identity "Default" -AllowedSenderDomains @{Add="partner.com"} -BulkThreshold 6
+Get-MessageTrace -Subject "Meeting" -StartDate (Get-Date).AddDays(-7) | Format-Table -AutoSize`,
+info:'Real fix: encourage partner to implement DKIM+DMARC so their mail passes authentication properly.'}
+]},
+
+{id:'x14',cat:'exchange',icon:'📬',title:'NDR 5.2.2 — Mailbox Full Despite Cloud Storage',difficulty:'Medium',
+desc:'User gets NDR 5.2.2 "mailbox full" from external senders. User has 100GB mailbox and it appears empty.',
+steps:[
+{title:'Check Total Mailbox Usage Including Recoverable Items',desc:'NDR 5.2.2 can be triggered by a full Recoverable Items folder, not just primary quota.',
+code:`Connect-ExchangeOnline
+Get-MailboxStatistics "user@domain.com" | Select-Object DisplayName,TotalItemSize,ItemCount,StorageLimitStatus`},
+{title:'Check Recoverable Items Size',desc:'Recoverable Items has its own 30GB quota — common when Litigation Hold is enabled.',
+code:`Get-MailboxFolderStatistics "user@domain.com" -FolderScope RecoverableItems |
+  Select-Object Name,FolderSize | Format-Table -AutoSize`},
+{title:'Enable Archive for Relief',desc:'Enable archive and create auto-move policy for old items.',
+code:`Enable-Mailbox "user@domain.com" -Archive`},
+{title:'Increase Recoverable Items Quota',desc:'Temporarily raise quota while investigating (requires E3+).',
+code:`Set-Mailbox "user@domain.com" -RecoverableItemsQuota 60GB -RecoverableItemsWarningQuota 55GB`,
+warning:'Validate with legal team before cleaning the dumpster if litigation hold is active.'}
+]},
+
+{id:'x15',cat:'exchange',icon:'⏱',title:'Delayed Mail — Greylisting by Receiving Domain',difficulty:'Easy',
+desc:'Outbound messages to specific domain take 5-15 mins to deliver. No NDR. Recipients confirm late arrival.',
+steps:[
+{title:'Confirm via Message Trace',desc:'Look for multiple Temporary failure events followed by final Delivered — 4xx codes indicate greylisting.',
+code:`Connect-ExchangeOnline
+Get-MessageTraceDetail -MessageTraceId "PASTE_ID" | Select-Object Date,Event,Detail | Format-Table -AutoSize`},
+{title:'Understand EOP IP Rotation',desc:'EOP rotates outbound IPs. Greylisting servers whitelist a specific IP — rotation resets the timer.',
+code:`# EOP outbound IPs: https://aka.ms/o365ips
+# Greylisting resets if IP changes between retries`},
+{title:'Ask Partner to Whitelist EOP IP Ranges',desc:'Most direct fix — partner whitelists EOP outbound ranges.',
+code:`# Direct partner IT to: https://aka.ms/o365ips
+# Ask them to whitelist all EOP outbound IP ranges`},
+{title:'Monitor Outbound Spam Filter Policy',desc:'Review outbound policy settings.',
+code:`Get-HostedOutboundSpamFilterPolicy | FL`,
+info:'Greylisting is a spam defense that temp-rejects first-time senders. Sender retries and succeeds — but with delay. No Exchange fix needed if routing is correct.'}
+]},
+
+{id:'x16',cat:'exchange',icon:'🔴',title:'Outbound Mail Blocked — User Added to Restricted Senders',difficulty:'Advanced',
+desc:'User cannot send external mail. NDR: "Your account has been restricted." Internal mail works fine.',
+steps:[
+{title:'Verify in Restricted Senders List',desc:'Check Defender portal for the user in Restricted Entities.',
+code:`# Microsoft Defender > Policies & Rules > Anti-spam > Restricted entities
+# Note the timestamp of restriction`},
+{title:'Investigate for Account Compromise',desc:'Check audit log for suspicious sign-ins, inbox rule changes, forwarding rules.',
+code:`Connect-ExchangeOnline
+Get-InboxRule -Mailbox "user@domain.com" | Select-Object Name,ForwardTo,ForwardAsAttachmentTo,DeleteMessage
+Search-UnifiedAuditLog -UserIds "user@domain.com" -Operations "Set-InboxRule","New-InboxRule" -StartDate (Get-Date).AddDays(-7)`,
+warning:'Never release from restricted list without first confirming the account is clean and secured.'},
+{title:'Reset Credentials & Revoke Sessions',desc:'Force password reset and revoke all active sessions.',
+code:`Connect-MgGraph -Scopes "User.ReadWrite.All"
+Update-MgUser -UserId "user@domain.com" -PasswordProfile @{ForceChangePasswordNextSignIn=$true}
+Invoke-MgInvalidateUserRefreshToken -UserId "user@domain.com"`},
+{title:'Remove Forwarding Rules & Release Restriction',desc:'Delete suspicious inbox rules then remove from restricted list via Defender portal.',
+code:`Remove-InboxRule -Mailbox "user@domain.com" -Identity "RuleIdHere" -Confirm:$false
+# Then release from Defender portal: Restricted entities > select user > Release`,
+info:'EOP auto-adds senders when outbound spam thresholds are exceeded — strong account compromise indicator.'}
+]},
+
+{id:'x17',cat:'exchange',icon:'🌐',title:'DMARC Failure — Subdomain Not Covered by SPF',difficulty:'Medium',
+desc:'Notification emails from notifications.yourdomain.com fail DMARC at recipient gateways.',
+steps:[
+{title:'Check DMARC Record for Subdomain',desc:'If no subdomain DMARC record, subdomain inherits parent policy.',
+code:`Resolve-DnsName "_dmarc.notifications.yourdomain.com" -Type TXT
+Resolve-DnsName "_dmarc.yourdomain.com" -Type TXT`},
+{title:'Check SPF for Subdomain',desc:'Subdomain needs its own SPF record — it does not inherit parent SPF.',
+code:`Resolve-DnsName "notifications.yourdomain.com" -Type TXT`},
+{title:'Create Subdomain SPF Record',desc:'Add TXT record scoped to that subdomain sending servers.',
+code:`# DNS TXT record on notifications.yourdomain.com:
+# v=spf1 include:servers.yourapplication.com ~all`},
+{title:'Add DKIM & DMARC for Subdomain',desc:'Generate DKIM key in SaaS platform for the subdomain and publish monitoring DMARC.',
+code:`Get-DkimSigningConfig | Select-Object Domain,Enabled,Status
+# DNS: _dmarc.notifications.yourdomain.com TXT v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com`,
+info:'Parent DMARC p=reject causes all subdomain mail to be rejected if subdomain has no SPF/DKIM. Fix: subdomain-specific records.'}
+]},
+
+{id:'x18',cat:'exchange',icon:'🔄',title:'Out-of-Office Reply Looping to Mailing List',difficulty:'Medium',
+desc:'Newsletter sent to 500 subscribers. One OOF replies to the list address, triggering another send — loop.',
+steps:[
+{title:'Identify Loop Source in Message Trace',desc:'Find repeated cycles between mailing list address and subscriber. OOF has Auto-Submitted: auto-replied header.',
+code:`Connect-ExchangeOnline
+Get-MessageTrace -SenderAddress "newsletter@domain.com" -StartDate (Get-Date).AddDays(-1) -EndDate (Get-Date) | Format-Table -AutoSize`},
+{title:'Check OOF External Setting',desc:'Verify if OOF is sending to all external including mailing lists.',
+code:`Get-MailboxAutoReplyConfiguration -Identity "user@domain.com" | FL AutoReplyState,ExternalAudience`},
+{title:'Check Remote Domain Auto-Reply Setting',desc:'Disable auto-replies to the mailing list domain.',
+code:`Get-RemoteDomain | Select-Object DomainName,AutoReplyEnabled | FL
+Set-RemoteDomain -Identity "*" -AutoReplyEnabled $false`},
+{title:'Create Transport Rule to Block Auto-Replies to DL',desc:'Block messages where Auto-Submitted header is not "no" sent to the DL address.',
+code:`New-TransportRule "Block Auto-Replies to DL" -HeaderMatchesMessageHeader "Auto-Submitted" -HeaderMatchesPatterns "auto-" -SentTo "newsletter@domain.com" -DeleteMessage $true`,
+info:'Fix: block auto-replies via transport rule + set remote domain AutoReplyEnabled=$false.'}
+]},
+
+{id:'x19',cat:'exchange',icon:'🏢',title:'New Employee Cannot Receive External Mail — Accepted Domain Missing',difficulty:'Medium',
+desc:'New team on custom domain (newbrand.com from merger) cannot receive external mail. NDR 5.1.10.',
+steps:[
+{title:'Check Accepted Domains',desc:'NDR 5.1.10 = recipient address not in Exchange routing tables.',
+code:`Connect-ExchangeOnline
+Get-AcceptedDomain | Select-Object DomainName,DomainType,IsDefault | Format-Table -AutoSize`},
+{title:'Add Domain to Microsoft 365',desc:'Add domain, complete DNS verification, add MX/CNAME/SPF records.',
+code:`# M365 Admin Center > Settings > Domains > Add Domain
+# Add newbrand.com, verify with TXT record, add MX+SPF records`},
+{title:'Verify Accepted Domain Type in EOP',desc:'After DNS verification, domain should be Authoritative for direct delivery.',
+code:`New-AcceptedDomain -DomainName "newbrand.com" -DomainType Authoritative -Name "NewBrand"
+Get-AcceptedDomain | Select-Object DomainName,DomainType`},
+{title:'Assign Addresses to Mailboxes and Test',desc:'Set email address on newbrand.com for each mailbox.',
+code:`Set-Mailbox -Identity "user@contoso.com" -EmailAddresses @{Add="user@newbrand.com"}
+Get-Mailbox -ResultSize Unlimited | Where-Object{$_.EmailAddresses -like "*newbrand.com*"}`,
+info:'Domain provisioned in Entra ID for identity but never added as Accepted Domain in Exchange. No MX record existed.'}
+]},
+
+{id:'x20',cat:'exchange',icon:'📎',title:'Large Attachments Silently Dropped',difficulty:'Easy',
+desc:'Design team emails with 80-150MB CAD files sent externally never received. No NDR. Internal works fine.',
+steps:[
+{title:'Check Org Message Size Limits',desc:'Check org-level send/receive limits.',
+code:`Connect-ExchangeOnline
+Get-TransportConfig | Select-Object MaxSendSize,MaxReceiveSize`},
+{title:'Check Connector-Level Limits',desc:'Connector may override org limit with a lower value.',
+code:`Get-OutboundConnector | Select-Object Name,MaxMessageSize`},
+{title:'Check Mailbox-Level Limits',desc:'Mailbox-level limits override org defaults.',
+code:`Get-Mailbox "user@domain.com" | Select-Object MaxSendSize,MaxReceiveSize`},
+{title:'Set Appropriate Limits or Redirect to SharePoint',desc:'Increase limit if business requirement, or redirect large files to SharePoint links.',
+code:`Set-TransportConfig -MaxSendSize 150MB
+# Better approach: share large files via SharePoint/OneDrive links`,
+info:'Outbound connector MaxMessageSize was 30MB. Messages over limit were rejected with no NDR generated to sender.'}
+]},
+
+{id:'x21',cat:'exchange',icon:'🏨',title:'Conference Room Rejecting All Booking Requests',difficulty:'Easy',
+desc:'Meeting booking requests to a conference room always get automatic decline. Was working last month.',
+steps:[
+{title:'Check Resource Booking Settings',desc:'Review all calendar processing settings.',
+code:`Connect-ExchangeOnline
+Get-CalendarProcessing -Identity "ConfRoom@domain.com" | FL AutomateProcessing,AllBookInPolicy,BookingWindowInDays,MaximumDurationInMinutes,ResourceDelegates`},
+{title:'Fix AutomateProcessing',desc:'Must be AutoAccept for automatic booking.',
+code:`Set-CalendarProcessing -Identity "ConfRoom@domain.com" -AutomateProcessing AutoAccept`},
+{title:'Fix BookingWindowInDays',desc:'If reset to 0, all requests decline. Default is 180.',
+code:`Set-CalendarProcessing -Identity "ConfRoom@domain.com" -BookingWindowInDays 180 -AllBookInPolicy $true
+Get-Mailbox "ConfRoom@domain.com" | Select-Object ResourceType,IsResource`},
+{title:'Test After Fix',desc:'Send a test meeting request and verify auto-accept.',
+code:`# Send test meeting from any internal mailbox to confirm room auto-accepts
+Get-CalendarProcessing -Identity "ConfRoom@domain.com" | Select-Object AutomateProcessing,BookingWindowInDays`,
+info:'BookingWindowInDays reset to 0 during a policy sweep — room auto-declined all requests.'}
+]},
+
+{id:'x22',cat:'exchange',icon:'📰',title:'Journaling Stops — Journal Rule Not Delivering to Archive',difficulty:'Advanced',
+desc:'Compliance team reports journal messages stopped arriving in third-party archiving system three days ago.',
+steps:[
+{title:'Check Journal Rule Status',desc:'Confirm rule is enabled and JournalEmailAddress is correct.',
+code:`Connect-ExchangeOnline
+Get-JournalRule | FL Name,Enabled,JournalEmailAddress,Scope`},
+{title:'Check Alternate Journal Mailbox for NDRs',desc:'Exchange sends NDRs for failed journal delivery — check that mailbox.',
+code:`Get-TransportConfig | Select-Object JournalingReportNdrTo`},
+{title:'Verify Archiving Endpoint Availability',desc:'Test email delivery to journal endpoint manually.',
+code:`# Send test to JournalEmailAddress directly from Outlook
+# If fails: check TLS cert on archive system, check port/connector`},
+{title:'Restart Journaling Flow',desc:'After fixing delivery issue, re-enable the rule.',
+code:`Enable-JournalRule -Identity "ArchiveRule"
+Set-TransportConfig -JournalingReportNdrTo "journalerrors@domain.com"`,
+info:'Third-party archive TLS cert expired. Delivery failed silently. NDRs accumulated in unmonitored alternate journal mailbox.'}
+]},
+
+{id:'x23',cat:'exchange',icon:'🖥',title:'Mail Relay Rejected — App Server IP Not in Connector',difficulty:'Medium',
+desc:'On-prem ERP returns SMTP 550 5.7.54: "SMTP relay not allowed" after a connector was rebuilt.',
+steps:[
+{title:'Identify the Sending IP',desc:'Find the application server outbound IP.',
+code:`# Check ERP server network config for its outbound IP
+# This IP appears in Exchange Online connection logs when relay is attempted`},
+{title:'Check Connector IP Allowlist',desc:'Verify application server IP is in SenderIPAddresses.',
+code:`Connect-ExchangeOnline
+Get-InboundConnector | FL Name,ConnectorType,SenderIPAddresses,Enabled`},
+{title:'Add IP to Connector',desc:'Add the application server IP to the relay connector.',
+code:`Set-InboundConnector -Identity "AppRelayConnector" -SenderIPAddresses @{Add="10.10.5.22"}
+# Or for subnet: use 10.10.5.0/24`},
+{title:'Verify Connector Type and Test',desc:'Connector must be type OnPremises — not Default.',
+code:`Get-InboundConnector | Select-Object Name,ConnectorType,SenderIPAddresses
+New-InboundConnector -Name "AppRelay" -ConnectorType OnPremises -SenderIPAddresses "10.10.5.0/24"`,
+info:'Inbound connector rebuild omitted ERP server IP. EOP rejected SMTP relay with 5.7.54.'}
+]},
+
+{id:'x24',cat:'exchange',icon:'👥',title:'Users Receiving Duplicate Emails',difficulty:'Easy',
+desc:'Several users receive every external email twice — once directly, once via a distribution group.',
+steps:[
+{title:'Examine Duplicate Headers',desc:'Compare Message-ID — if identical, true duplication. Check To/CC/BCC.',
+code:`# Compare raw headers of both copies
+# Look for one copy showing a group address in To/CC`},
+{title:'Check Group Membership Overlap',desc:'Affected users may be both direct recipients and members of a group also receiving the mail.',
+code:`Connect-ExchangeOnline
+Get-DistributionGroupMember -Identity "GroupName" | Select-Object Name,PrimarySmtpAddress`},
+{title:'Check for Nested Group Overlap',desc:'If Group A includes Group B and both contain the same users, duplicates occur.',
+code:`Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
+    Get-DistributionGroupMember $_.Identity | Where-Object{$_.PrimarySmtpAddress -eq "user@domain.com"} |
+    ForEach-Object{Write-Host "Found in: $($_.DisplayName)"}
+}`},
+{title:'Clean Group Membership',desc:'Remove direct memberships where user is already covered by nested group.',
+code:`Remove-DistributionGroupMember -Identity "GroupName" -Member "user@domain.com" -Confirm:$false`,
+info:'Reorganization created group including users already in parent group. Double membership path = duplicate delivery.'}
+]},
+
+{id:'x25',cat:'exchange',icon:'➡️',title:'External Forwarding Blocked — Anti-Exfiltration Policy',difficulty:'Medium',
+desc:'Legitimate vendor requires auto-forwarding of support tickets externally. Inbox rules forward but mail never arrives externally.',
+steps:[
+{title:'Confirm Automatic Forwarding Block',desc:'Check outbound spam policy AutoForwardingMode.',
+code:`Connect-ExchangeOnline
+Get-HostedOutboundSpamFilterPolicy | Select-Object Name,AutoForwardingMode`},
+{title:'Create Scoped Exception for Specific Users',desc:'New outbound spam filter policy applied to specific users only.',
+code:`New-HostedOutboundSpamFilterPolicy -Name "AllowVendorForwarding" -AutoForwardingMode On
+New-HostedOutboundSpamFilterRule -Name "VendorForwardRule" -HostedOutboundSpamFilterPolicy "AllowVendorForwarding" -SentTo "supportteam@domain.com"`},
+{title:'Or Use a Transport Rule Instead',desc:'More secure: transport rule forwards specific messages rather than user-level permission.',
+code:`New-TransportRule "ForwardToVendor" -SenderAddressLocation Header -FromScope InOrganization -SentToScope NotInOrganization -RedirectMessageTo "vendor@external.com"`},
+{title:'Enable Forwarding Activity Alert',desc:'Monitor for unexpected forwarding even after exception is in place.',
+code:`# Defender portal > Alert policies > New forwarding activity alert
+Get-HostedOutboundSpamFilterPolicy | Select-Object Name,AutoForwardingMode`,
+info:'Default outbound spam policy blocks all auto-forwarding (AutoForwardingMode: Automatic). Fix: scoped outbound policy for the specific user.'}
+]},
+
+{id:'x26',cat:'exchange',icon:'🎭',title:'CEO Display Name Spoofed — BEC Impersonation Attack',difficulty:'Advanced',
+desc:'Users received emails appearing from CEO (Gmail address) asking for wire transfers. Display name matches exactly.',
+steps:[
+{title:'Analyze the Attack Emails',desc:'From header shows external address but Display Name matches CEO exactly.',
+code:`# Raw headers: From: "CEO Name" <ceo.name@gmail.com>
+# Real CEO: ceo@yourdomain.com
+# This is display name spoofing, not domain spoofing`},
+{title:'Enable Anti-Phishing Impersonation Protection',desc:'Add CEO to protected users list in anti-phishing policy.',
+code:`Connect-ExchangeOnline
+Get-AntiPhishPolicy | FL EnableTargetedUserProtection,TargetedUsersToProtect
+Set-AntiPhishPolicy -Identity "Default" -EnableTargetedUserProtection $true -TargetedUsersToProtect @("CEO Name;ceo@yourdomain.com")`},
+{title:'Enable Mailbox Intelligence',desc:'Learns communication patterns and flags external senders mimicking internal display names.',
+code:`Set-AntiPhishPolicy -Identity "Default" -EnableMailboxIntelligence $true -EnableMailboxIntelligenceProtection $true`},
+{title:'Enable First Contact Safety Tip & Run Attack Simulator',desc:'Visual tip for users + targeted training for finance and executive assistants.',
+code:`Set-AntiPhishPolicy -Identity "Default" -EnableFirstContactSafetyTips $true
+# Defender portal > Attack Simulation Training > BEC simulation`,
+info:'Anti-phishing impersonation protection was not enabled. Fix: enable for C-level + mailbox intelligence + user training.'}
+]},
+
+{id:'x27',cat:'exchange',icon:'📊',title:'SPF Permerror — Record Exceeds 10-Lookup Limit',difficulty:'Medium',
+desc:'Inbound mail from a specific domain fails SPF with "permerror — too many DNS lookups." They added a new include.',
+steps:[
+{title:'Count Current Lookups in SPF Record',desc:'Each include, a, mx, ptr, exists, redirect counts. Includes within includes add recursively.',
+code:`Resolve-DnsName "yourdomain.com" -Type TXT | Select-Object Strings
+# Use SPF checker at mxtoolbox.com/spf.aspx to count total lookups`},
+{title:'Identify and Remove Redundant Mechanisms',desc:'Find outdated email service includes no longer in use.',
+code:`nslookup -type=TXT yourdomain.com 8.8.8.8
+# Check each include for current relevance`},
+{title:'Flatten the SPF Record',desc:'Replace include mechanisms with their actual IP ranges.',
+code:`Resolve-DnsName "_spf.google.com" -Type TXT
+# Convert include:sendgrid.net to actual IPs — reduces lookup count to zero for those entries`},
+{title:'Use SPF Management Service or Validate',desc:'Services like dmarcian handle SPF flattening automatically.',
+code:`# After fix:
+Resolve-DnsName "yourdomain.com" -Type TXT
+# Validate at mxtoolbox.com/spf.aspx`,
+info:'SPF accumulated 14 lookups after three new SaaS includes. Fix: flatten to IPs, reduce lookups below 10.'}
+]},
+
+{id:'x28',cat:'exchange',icon:'🏷',title:'Message Classification Label Causing Mail Blocks',difficulty:'Advanced',
+desc:'"Project Confidential" sensitivity label is blocking external delivery even when external sharing is intended.',
+steps:[
+{title:'Identify the Blocking Transport Rule',desc:'Extended trace shows "Transport Rule" as block event. Get rule name.',
+code:`Connect-ExchangeOnline
+Get-TransportRule | Where-Object{$_.MessageContainsDataClassifications -ne $null} | FL Name,State,Conditions,Actions`},
+{title:'Review Rule Conditions',desc:'Check if rule blocks all external delivery for the label without exceptions.',
+code:`Get-TransportRule "ConfidentialBlock" | FL`},
+{title:'Add Approved Domain Exception',desc:'Modify transport rule to exclude approved external partners.',
+code:`Set-TransportRule "ConfidentialBlock" -ExceptIfSentTo @("trustedpartner@domain.com")
+# Or: -ExceptIfSentToScope NotInOrganization for trusted domains list`},
+{title:'Adjust Label Scope in Purview or Audit Usage',desc:'Edit sensitivity label external sharing permission or audit auto-labeling scope.',
+code:`# Microsoft Purview > Information Protection > Labels > Edit label
+# Specify whether external sharing is allowed
+# Run Content Explorer report to see label usage`,
+info:'Transport rule blocked all external delivery for label without exception for approved partners. Fix: add exception for approved domains.'}
+]},
+
+{id:'x29',cat:'exchange',icon:'📎',title:'Attachment Stripped by Safe Attachments Policy',difficulty:'Medium',
+desc:'Recipients get emails with no attachment. Senders confirm they attached files. Email body arrives, attachment missing.',
+steps:[
+{title:'Check Safe Attachments Policy Action',desc:'If Action is Block, detected attachments are deleted with no notification.',
+code:`Connect-ExchangeOnline
+Get-SafeAttachmentPolicy | FL Name,Enable,Action,Redirect,RedirectAddress`},
+{title:'Check Verdict in Threat Explorer',desc:'In Defender > Threat Explorer, search the message. Attachments column shows verdict.',
+code:`# Defender portal > Threat Explorer > search by recipient/sender
+# Check Attachments tab for: Malware, Suspicious, or Clean verdict`},
+{title:'Enable Redirect Instead of Block',desc:'Send suspicious attachments to admin for review instead of silently dropping.',
+code:`Set-SafeAttachmentPolicy -Identity "Default" -Redirect $true -RedirectAddress "securityadmin@domain.com" -Action Redirect`},
+{title:'Submit False Positive for Reclassification',desc:'If file is known clean, submit for Microsoft re-evaluation.',
+code:`Get-SafeAttachmentRule | FL Name,Priority,SafeAttachmentPolicy,RecipientDomainIs
+# Defender portal > Submissions > Email Attachments > Submit for reclassification`,
+info:'Safe Attachments Block mode silently removed macro-enabled Excel. No notification configured. Fix: enable redirect to admin.'}
+]},
+
+{id:'x30',cat:'exchange',icon:'📁',title:'Emails Appearing in Wrong Folder — Suspicious Inbox Rule',difficulty:'Advanced',
+desc:'Emails from manager always go to subfolder "Archive-Old." User did not create this rule.',
+steps:[
+{title:'List Inbox Rules',desc:'Find the suspicious rule redirecting emails.',
+code:`Connect-ExchangeOnline
+Get-InboxRule -Mailbox "user@domain.com" | FL Name,Description,From,MoveToFolder,Enabled,RuleIdentity`},
+{title:'Check Rule Creation in Audit Log',desc:'Find when and from where the rule was created.',
+code:`Search-UnifiedAuditLog -Operations "New-InboxRule","Set-InboxRule" -UserIds "user@domain.com" -StartDate (Get-Date).AddDays(-30) |
+  Select-Object CreationDate,UserIds,@{N='ClientIP';E={($_.AuditData | ConvertFrom-Json).ClientIP}}`},
+{title:'Assess for Compromise Indicators',desc:'If unexpected geography or odd-hours creation — treat as compromise.',
+code:`# Check Entra ID sign-in logs for suspicious activity
+Connect-MgGraph -Scopes "AuditLog.Read.All"
+Get-MgAuditLogSignIn -Filter "userPrincipalName eq 'user@domain.com'" -Top 50 |
+  Select-Object CreatedDateTime,IpAddress,Location | Format-Table -AutoSize`},
+{title:'Remove the Rule & Secure Account',desc:'Delete suspicious rule, force password reset, revoke sessions.',
+code:`Remove-InboxRule -Mailbox "user@domain.com" -Identity "RuleIdHere" -Confirm:$false
+Connect-MgGraph -Scopes "User.ReadWrite.All"
+Invoke-MgInvalidateUserRefreshToken -UserId "user@domain.com"
+Update-MgUser -UserId "user@domain.com" -PasswordProfile @{ForceChangePasswordNextSignIn=$true}`,
+warning:'Inbox rule created during compromised session redirecting mail to hidden subfolder — classic BEC monitoring tactic.'}
+]},
+
+{id:'x31',cat:'exchange',icon:'🌏',title:'Mail Arriving with Broken Encoding — Japanese Characters Garbled',difficulty:'Easy',
+desc:'Japanese partner reports receiving emails with garbled characters — question marks replacing Asian text.',
+steps:[
+{title:'Read Raw Headers for Charset Declaration',desc:'Check Content-Type and Content-Transfer-Encoding headers.',
+code:`# In raw headers look for:
+# Content-Type: text/plain; charset=utf-8
+# Content-Transfer-Encoding: base64
+# Incorrect: charset=windows-1252 or charset=iso-2022-jp on UTF-8 content`},
+{title:'Check Outlook Encoding Setting',desc:'Verify Outlook is set to use Unicode for outgoing messages.',
+code:`# Outlook > File > Options > Advanced > International Options
+# Enable: "Use Unicode (UTF-8) for outgoing messages"`},
+{title:'Check Remote Domain Encoding Setting',desc:'Custom charset for the partner domain may conflict with UTF-8 content.',
+code:`Connect-ExchangeOnline
+Get-RemoteDomain | Select-Object DomainName,CharacterSet,NonMimeCharacterSet`},
+{title:'Set Remote Domain to Unicode',desc:'Force UTF-8 encoding for messages to this domain.',
+code:`Set-RemoteDomain -Identity "jp-partner.co.jp" -CharacterSet "utf-8" -NonMimeCharacterSet "iso-2022-jp"`,
+info:'Remote domain setting forced ISO-2022-JP. UTF-8 Japanese content was re-encoded incorrectly. Fix: set CharacterSet to utf-8 for partner domain.'}
+]},
+
+{id:'x32',cat:'exchange',icon:'📜',title:'Mail Flow Rule Not Triggering — Condition Mismatch',difficulty:'Medium',
+desc:'Compliance transport rule to add legal disclaimer to all outbound mail is not appending the footer.',
+steps:[
+{title:'Check Rule Conditions Including Scope',desc:'A scope of InOrganization means rule only triggers for internal mail.',
+code:`Connect-ExchangeOnline
+Get-TransportRule "DisclaimerRule" | FL Conditions,Exceptions,State,Priority,SentToScope`},
+{title:'Fix SentToScope to NotInOrganization',desc:'For outbound mail, scope must be NotInOrganization.',
+code:`Set-TransportRule "DisclaimerRule" -SentToScope NotInOrganization`},
+{title:'Check Rule Priority for Stop Processing',desc:'Higher priority rule may have Stop Processing action blocking this rule.',
+code:`Get-TransportRule | Sort-Object Priority | Select-Object Name,Priority,State | Format-Table -AutoSize`},
+{title:'Verify Disclaimer Action & FallbackAction',desc:'FallbackAction should be Wrap, not Ignore or Reject.',
+code:`Get-TransportRule "DisclaimerRule" | Select-Object ApplyHtmlDisclaimerText,ApplyHtmlDisclaimerFallbackAction
+# Test by sending to external address and verify disclaimer appears`,
+info:'SentToScope was InOrganization — external messages excluded. Disclaimer never applied. Fix: change to NotInOrganization.'}
+]},
+
+{id:'x33',cat:'exchange',icon:'📮',title:'Distribution List Not Receiving External Mail — NDR 5.7.133',difficulty:'Easy',
+desc:'External vendor emails to DL bounce with NDR 5.7.133: "Group does not accept external messages."',
+steps:[
+{title:'Check DL External Sender Setting',desc:'RequireSenderAuthenticationEnabled=$true blocks all external senders.',
+code:`Connect-ExchangeOnline
+Get-DistributionGroup -Identity "groupname@domain.com" | Select-Object RequireSenderAuthenticationEnabled,ModerationEnabled,ModeratedBy`},
+{title:'Allow External Senders',desc:'Set RequireSenderAuthenticationEnabled to false.',
+code:`Set-DistributionGroup -Identity "groupname@domain.com" -RequireSenderAuthenticationEnabled $false`},
+{title:'Check for Moderation Issues',desc:'If moderation on and no moderators assigned, external mail pends then auto-declines.',
+code:`Get-DistributionGroup -Identity "groupname@domain.com" | Select-Object ModeratedBy,BypassModerationFromSendersOrMembers`},
+{title:'Check AcceptMessagesOnlyFrom List',desc:'If populated, only listed senders can send to the group.',
+code:`Get-DistributionGroup -Identity "groupname@domain.com" | Select-Object AcceptMessagesOnlyFrom,AcceptMessagesOnlyFromSendersOrMembers`,
+info:'Policy modification enabled RequireSenderAuthenticationEnabled=$true, blocking external senders. Fix: set to $false.'}
+]},
+
+{id:'x34',cat:'exchange',icon:'🎣',title:'Phishing Bypassed All Filters — Whitelisted Sender Domain',difficulty:'Advanced',
+desc:'Phishing email with credential-harvesting link delivered to multiple users. Domain was allowlisted 6 months ago.',
+steps:[
+{title:'Confirm Delivery Path in Threat Explorer',desc:'Check Overrides column — shows "Allowed Sender" as bypass reason.',
+code:`# Defender portal > Threat Explorer > search message
+# Check "Overrides" column for "Allowed Sender" bypass reason`},
+{title:'Identify and Remove from Allowlist',desc:'Find the domain in AllowedSenderDomains and remove it.',
+code:`Connect-ExchangeOnline
+Get-HostedContentFilterPolicy | Select-Object AllowedSenders,AllowedSenderDomains | FL
+Set-HostedContentFilterPolicy -Identity "Default" -AllowedSenderDomains @{Remove="compromiseddomain.com"}`},
+{title:'Remediate Affected Users',desc:'Find all users who received mail from that domain in past 90 days and soft-delete.',
+code:`New-ComplianceSearch -Name "PhishCleanup" -ExchangeLocation All -ContentMatchQuery "from:bad-domain.com"
+Start-ComplianceSearch -Identity "PhishCleanup"
+New-ComplianceSearchAction -SearchName "PhishCleanup" -Purge -PurgeType SoftDelete`},
+{title:'Audit All Allowlist Entries',desc:'Remove entries without current documented business justification.',
+code:`Get-HostedContentFilterPolicy | Select-Object AllowedSenders,AllowedSenderDomains | FL
+# Review each entry — implement quarterly allowlist review process`,
+warning:'Allowlisted domains bypass ALL anti-spam and anti-phishing checks. Never allowlist without documented justification and expiry date.'}
+]},
+
+{id:'x35',cat:'exchange',icon:'🔒',title:'Quarantine Release Not Working — User Cannot Self-Release',difficulty:'Medium',
+desc:'End user quarantine release requests fail silently. Admins see requests but released messages never arrive.',
+steps:[
+{title:'Check Quarantine Policy on Anti-Spam Rule',desc:'QuarantineTag defines what end-users can do with quarantined items.',
+code:`Connect-ExchangeOnline
+Get-HostedContentFilterPolicy | Select-Object Name,SpamQuarantineTag,HighConfidenceSpamQuarantineTag | FL`},
+{title:'Verify QuarantinePolicy Allows Release',desc:'AdminOnlyAccessPolicy blocks all end-user action.',
+code:`Get-QuarantinePolicy | Select-Object Name,PermissionToRelease,PermissionToViewHeader,EsnEnabled | FL`},
+{title:'Assign Appropriate Policy',desc:'Assign DefaultFullAccessPolicy to allow self-release.',
+code:`Set-HostedContentFilterPolicy -Identity "Default" -SpamQuarantineTag "DefaultFullAccessPolicy"`},
+{title:'Enable End-User Spam Notifications',desc:'Without ESN enabled, users never receive notification emails.',
+code:`Set-QuarantinePolicy -Identity "DefaultFullAccessPolicy" -EsnEnabled $true
+# Test: trigger spam quarantine on test message, log in to protection.office.com/quarantine`,
+info:'QuarantineTag was AdminOnlyAccessPolicy — prevents end-user action. Fix: change to DefaultFullAccessPolicy + enable ESN.'}
+]},
+
+{id:'x36',cat:'exchange',icon:'🚚',title:'Migration Cutover — Some Users Unreachable After Cutover',difficulty:'Advanced',
+desc:'After cutover migration to Exchange Online, mail to newly migrated users bounces with 5.1.1 NDR.',
+steps:[
+{title:'Confirm Mailbox Location',desc:'Check RecipientTypeDetails for successfully migrated users.',
+code:`Connect-ExchangeOnline
+Get-Mailbox -Identity "user@domain.com" | Select-Object RecipientTypeDetails,ServerName,ExchangeGuid`},
+{title:'Check MX Record Propagation',desc:'MX must point to EOP — still pointing to on-prem blocks cloud mailbox delivery.',
+code:`Resolve-DnsName "domain.com" -Type MX
+# Should resolve to: tenant.mail.protection.outlook.com`},
+{title:'Verify On-Prem Hybrid Routing',desc:'On-prem send connector must route cloud mailboxes to EOP during cutover period.',
+code:`# On Exchange Server: Get-SendConnector to verify hybrid connector routing to EOP`},
+{title:'Update Accepted Domain to Authoritative',desc:'After MX cutover, change from InternalRelay to Authoritative.',
+code:`Get-AcceptedDomain | Select-Object DomainName,DomainType
+Set-AcceptedDomain -Identity "yourdomain.com" -DomainType Authoritative`,
+info:'MX pointed to EOP but Accepted Domain remained InternalRelay. EOP tried to relay to on-prem which no longer had mailbox. Fix: change to Authoritative after MX cutover.'}
+]},
+
+{id:'x37',cat:'exchange',icon:'🔐',title:'Sensitivity Label Encryption Preventing External Reply',difficulty:'Advanced',
+desc:'Encrypt-Only label email cannot be replied to by external recipient. They receive "Access Denied."',
+steps:[
+{title:'Identify the Label Applied',desc:'Check email headers for MIP label GUID.',
+code:`# In raw headers look for:
+# msip_labels: or x-ms-exchange-organization-mip-label
+# Identify label name and GUID`},
+{title:'Check Label Rights in Purview',desc:'Review what rights external recipients receive — they may not be listed.',
+code:`Connect-ExchangeOnline
+Get-Label | Select-Object DisplayName,Guid,IsActive | Format-Table -AutoSize
+# Microsoft Purview > Information Protection > Labels > Edit label > Assign Permissions Now`},
+{title:'Add External Recipient Rights to Label',desc:'Edit label to include external recipients with Reply + Read rights.',
+code:`# Purview > Labels > Edit > Assign permissions now > Add external users with Reviewer rights
+Get-AIPFileStatus -Path "testfile.docx"  # If AIP PowerShell installed`},
+{title:'Test with External Account',desc:'Send test protected message and attempt reply from external.',
+code:`Get-RMSTemplate | Select-Object TemplateId,DefaultRightsDefinitions
+# Verify Rights Management cert issued and permissions accessible`,
+info:'Encrypt-Only label did not include external recipients in Rights Definition. Fix: edit label to add external users with Reviewer rights.'}
+]},
+
+{id:'x38',cat:'exchange',icon:'📤',title:'Shared Mailbox Auto-Mapping Missing in Outlook',difficulty:'Easy',
+desc:'User granted Full Access to shared mailbox but it does not auto-appear in Outlook profile.',
+steps:[
+{title:'Check Auto-Mapping Status on the Permission',desc:'AutoMapping is set when permission is granted — cannot be changed in-place.',
+code:`Connect-ExchangeOnline
+Get-MailboxPermission -Identity "sharedmailbox@domain.com" | Where-Object{$_.User -like "user@domain.com"} | FL User,AccessRights,AutoMapping`},
+{title:'Remove and Re-Add Permission with AutoMapping Enabled',desc:'AutoMapping=False is permanent — must remove and re-grant.',
+code:`Remove-MailboxPermission -Identity "sharedmailbox@domain.com" -User "user@domain.com" -AccessRights FullAccess -Confirm:$false
+Add-MailboxPermission -Identity "sharedmailbox@domain.com" -User "user@domain.com" -AccessRights FullAccess -AutoMapping $true`},
+{title:'Restart Outlook and Wait for Autodiscover',desc:'Full close and reopen Outlook — allow up to 60 minutes after permission grant.',
+code:`# User must fully close Outlook (not just minimize) and reopen
+# Auto-mapping relies on Autodiscover service to add mailbox to profile`},
+{title:'Test Autodiscover Chain if Still Missing',desc:'Run Outlook built-in autodiscover test.',
+code:`# Hold Ctrl > Right-click Outlook in system tray > Test E-mail AutoConfiguration
+# Verify MAPI URL resolves correctly`,
+info:'Full Access granted with -AutoMapping $false. This is immutable. Fix: remove and re-add permission with AutoMapping $true.'}
+]},
+
+{id:'x39',cat:'exchange',icon:'⚖️',title:'Email Disclaimer Duplicating on Every Reply',difficulty:'Medium',
+desc:'Legal disclaimer appended correctly to first send, but every reply in chain adds another copy.',
+steps:[
+{title:'Check Transport Rule for Missing Exceptions',desc:'Rule fires on every message including reply chains if no exception set.',
+code:`Connect-ExchangeOnline
+Get-TransportRule "DisclaimerRule" | FL Conditions,Exceptions`},
+{title:'Add Exception for Existing Disclaimer Text',desc:'Skip if disclaimer text already exists in body.',
+code:`Set-TransportRule "DisclaimerRule" -ExceptIfBodyContainsWords @("CONFIDENTIAL NOTICE","This email and any files")`},
+{title:'Add Exception Based on Reply Header',desc:'References header exists only in replies — use to detect reply chains.',
+code:`Set-TransportRule "DisclaimerRule" -ExceptIfHeaderContainsMessageHeader "In-Reply-To" -ExceptIfHeaderContainsWords "@"`},
+{title:'Test Reply Chain Behavior',desc:'Verify disclaimer added on first send but not on subsequent replies.',
+code:`Get-TransportRule | Sort-Object Priority | Select-Object Name,Priority,State | Format-Table -AutoSize
+# Send new message > verify disclaimer added > reply > verify NOT added again`,
+info:'No exception for reply chains or existing disclaimer text. Fix: add body-content exception matching disclaimer opening text.'}
+]},
+
+{id:'x40',cat:'exchange',icon:'🗄',title:'Archive Mailbox Items Not Visible in OWA',difficulty:'Easy',
+desc:'User sees Online Archive in Outlook desktop but not in OWA. OWA shows archive folder as empty.',
+steps:[
+{title:'Verify Archive Provisioning & Auto-Expanding',desc:'Check if auto-expanding archive is enabled.',
+code:`Connect-ExchangeOnline
+Get-Mailbox "user@domain.com" | Select-Object ArchiveStatus,ArchiveGuid,AutoExpandingArchiveEnabled,ArchiveName`},
+{title:'Understand Auto-Expanding Archive OWA Limitation',desc:'OWA can only display primary archive — auxiliary partitions from auto-expanding are not shown.',
+code:`Get-MailboxStatistics "user@domain.com" -Archive | Select-Object TotalItemSize,ItemCount
+# This is EXPECTED BEHAVIOR — not a bug`},
+{title:'Use Outlook Desktop for Archive Access',desc:'Full MAPI client (Outlook desktop) accesses all archive partitions.',
+code:`Enable-Mailbox "user@domain.com" -AutoExpandingArchive`},
+{title:'Use Content Search for Compliance Needs',desc:'Purview Content Search accesses all archive partitions including auxiliary.',
+code:`# Microsoft Purview > Content Search > include user as custodian
+# Content Search is the correct tool for compliance searches across auto-expanded archives`,
+info:'Auto-expanding archive auxiliary partitions only accessible via Outlook desktop (MAPI) and compliance tools. OWA limitation — expected behavior.'}
+]},
+
+{id:'x41',cat:'exchange',icon:'📱',title:'Mobile Device Cannot Sync Email — ActiveSync Blocked',difficulty:'Easy',
+desc:'New smartphone cannot sync Exchange email — shows "Account verification failed." Other devices work fine.',
+steps:[
+{title:'Check Device Access State',desc:'New device may show as Quarantined or Blocked.',
+code:`Connect-ExchangeOnline
+Get-MobileDeviceStatistics -Mailbox "user@domain.com" | Select-Object DeviceFriendlyName,DeviceModel,Status,LastSyncAttemptTime`},
+{title:'Check Organization Default Access Level',desc:'If Quarantine, new devices need admin approval. If Block, no new devices allowed.',
+code:`Get-ActiveSyncOrganizationSettings | Select-Object DefaultAccessLevel`},
+{title:'Allow the Specific Device',desc:'Approve quarantined device via EAC or PowerShell.',
+code:`Set-CASMailbox -Identity "user@domain.com" -ActiveSyncAllowedDeviceIDs @{Add="DeviceIDHere"}
+# Or approve via EAC mobile device quarantine portal`},
+{title:'Check Device Access Rules & Verify After Allow',desc:'Rules may block specific device types or OS versions.',
+code:`Get-ActiveSyncDeviceAccessRule | FL AccessLevel,QueryString
+# After allowing, wait up to 1 hour then check:
+Get-MobileDeviceStatistics -Mailbox "user@domain.com" | Select-Object DeviceFriendlyName,Status,LastSyncAttemptTime`,
+info:'DefaultAccessLevel=Quarantine. New device quarantined pending admin approval. Fix: approve in EAC or add DeviceID to AllowedDeviceIDs.'}
+]},
+
+{id:'x42',cat:'exchange',icon:'📈',title:'Bulk Mail Campaign Triggering High Complaint Rate Alert',difficulty:'Medium',
+desc:'Outbound spam alert fires for marketing mailbox. Sender approaching hourly limit. Campaign is legitimate but poorly configured.',
+steps:[
+{title:'Check Outbound Spam Policy Thresholds',desc:'Verify current limits and what action triggers.',
+code:`Connect-ExchangeOnline
+Get-HostedOutboundSpamFilterPolicy | FL RecipientLimitPerHour,RecipientLimitPerDay,ActionWhenThresholdReached`},
+{title:'Review Campaign Configuration',desc:'Check for required elements: List-Unsubscribe header, proper From/Reply-To, plain text alternative.',
+code:`Get-MessageTrace -SenderAddress "marketing@domain.com" -StartDate (Get-Date).AddDays(-1) -EndDate (Get-Date) | Measure-Object`},
+{title:'Move Campaign to Dedicated Sending Platform',desc:'Exchange Online is not designed for bulk marketing. Use SendGrid, Mailchimp, etc.',
+code:`# Exchange Online sending limits per mailbox:
+# 10,000 recipients/day; 500 recipients/message
+# Dedicated platforms have proper IP pools and reputation management`},
+{title:'Monitor IP Reputation',desc:'Check Microsoft SNDS for outbound IP complaint rate.',
+code:`Get-HostedOutboundSpamFilterPolicy | Select-Object AutoForwardingMode,BccSuspiciousOutboundMail
+# Check SNDS: https://sendersupport.olc.protection.outlook.com/snds/
+# Complaint rate > 0.3% = address immediately`,
+warning:'Complaint rate > 0.3% can lead to de-listing of EOP outbound IPs affecting your entire tenant. Move bulk mail to dedicated platform.'}
+]},
+
+{id:'x43',cat:'exchange',icon:'🔗',title:'Safe Links Breaking Third-Party SSO Links',difficulty:'Medium',
+desc:'Users clicking SSO links in email get "Page Not Found." URL works when pasted directly in browser.',
+steps:[
+{title:'Confirm Safe Links Rewriting',desc:'Broken URL will start with https://nam.safelinks.protection.outlook.com/?url=...',
+code:`Connect-ExchangeOnline
+Get-SafeLinksPolicy | Select-Object Name,DoNotRewriteUrls,EnableForInternalSenders | FL`},
+{title:'Test Decoded Original URL',desc:'Decode the wrapped URL — if original works, Safe Links wrapping is the issue.',
+code:`# URL-decode the url= parameter from the safelinks URL
+# Test decoded URL directly in browser
+# If it works = Safe Links altered embedded SSO state token`},
+{title:'Add SSO URL Pattern to Do Not Rewrite List',desc:'Exclude the SSO provider domain from URL rewriting.',
+code:`Set-SafeLinksPolicy -Identity "Default" -DoNotRewriteUrls @{Add="https://sso.identityprovider.com/*"}
+Get-SafeLinksRule | Select-Object Name,Priority,SafeLinksPolicy,RecipientDomainIs`},
+{title:'Test End-to-End SSO Flow',desc:'Have user receive fresh SSO link email — verify URL is not wrapped.',
+code:`Get-SafeLinksPolicy | Select-Object Name,DoNotRewriteUrls | FL
+# Verify: URL starts with sso.identityprovider.com NOT safelinks.protection.outlook.com`,
+info:'Safe Links wrapped SSO redirect URL, altering embedded SAML state token. IdP received malformed request. Fix: add SSO domain to DoNotRewriteUrls.'}
+]},
+
+{id:'x44',cat:'exchange',icon:'🔎',title:'Mailbox Audit Log Not Capturing Delegate Actions',difficulty:'Advanced',
+desc:'Compliance investigation finds no audit events for delegate access to executive mailbox despite known access.',
+steps:[
+{title:'Check Mailbox Audit Status and Configured Actions',desc:'Verify audit is enabled and which delegate actions are logged.',
+code:`Connect-ExchangeOnline
+Get-Mailbox "exec@domain.com" | Select-Object AuditEnabled,AuditDelegate,AuditOwner,AuditAdmin`},
+{title:'Understand Default vs Full Audit Actions',desc:'Default delegate actions logged: SendAs, SendOnBehalf, SoftDelete, HardDelete. FolderBind and Create are NOT logged by default.',
+code:`# Default AuditDelegate actions do NOT include:
+# FolderBind (reading mail), Create, Update, Move
+# These must be explicitly added`},
+{title:'Enable Additional Delegate Audit Actions',desc:'Add FolderBind to capture every time delegate opens a folder.',
+code:`Set-Mailbox "exec@domain.com" -AuditDelegate @{Add="FolderBind","Create","Update","Move"}`,
+warning:'FolderBind generates very high log volume. Historical access before enabling is not recoverable.'},
+{title:'Search Audit Log for Delegate Activity',desc:'Query for newly enabled actions going forward.',
+code:`Search-UnifiedAuditLog -Operations "FolderBind","SendAs" -UserIds "delegate@domain.com" -StartDate (Get-Date).AddDays(-30) |
+  Select-Object CreationDate,UserIds,Operations | Format-Table -AutoSize
+# For E5: Advanced Audit extends retention to 10 years`,
+info:'AuditDelegate did not include FolderBind or Create. Historical access before enablement is permanently unrecoverable. Fix: add FolderBind to AuditDelegate.'}
+]},
+
+{id:'x45',cat:'exchange',icon:'🔗',title:'Hybrid Free/Busy Not Working After Tenant Migration',difficulty:'Advanced',
+desc:'After tenant-to-tenant migration, source tenant users cannot see destination tenant free/busy.',
+steps:[
+{title:'Check Organization Relationship',desc:'Migration breaks existing Organization Relationships by default.',
+code:`Connect-ExchangeOnline
+Get-OrganizationRelationship | FL DomainNames,FreeBusyAccessEnabled,FreeBusyAccessLevel,TargetApplicationUri`},
+{title:'Verify Federation Trust',desc:'Both tenants must have federation trusts with Microsoft Federation Gateway.',
+code:`Get-FederationTrust | FL`},
+{title:'Create New Organization Relationship',desc:'Create relationship pointing to destination tenant.',
+code:`New-OrganizationRelationship -Name "CrossTenant" -DomainNames "destinationtenant.com" -FreeBusyAccessEnabled $true -FreeBusyAccessLevel LimitedDetails -TargetApplicationUri "outlook.com"`},
+{title:'Test and Configure OAuth if Needed',desc:'Run test-OrganizationRelationship to identify exact failure point.',
+code:`Test-OrganizationRelationship -Identity "CrossTenant" -UserIdentity "user@sourcetenant.com"
+New-IntraOrganizationConnector -Name "CrossTenantConnector" -DiscoveryEndpoint "https://autodiscover.domain.com/autodiscover/autodiscover.svc" -Enabled $true`,
+info:'Tenant migration invalidated existing Organization Relationship. Fix: create new Org Relationship pointing to destination tenant + test OAuth flow.'}
 ]}
 
 ];
